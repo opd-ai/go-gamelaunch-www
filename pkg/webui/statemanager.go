@@ -7,8 +7,19 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+// StateManager manages game state versions and change tracking
+// Moved from: state.go
+type StateManager struct {
+	mu           sync.RWMutex
+	currentState *GameState
+	version      uint64
+	waiters      map[string]chan *StateDiff
+	waitersMu    sync.Mutex
+}
 
 // NewStateManager creates a new state manager
 // Moved from: state.go

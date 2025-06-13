@@ -8,6 +8,10 @@ import (
 	"github.com/fatih/color"
 )
 
+// ColorConverter handles ANSI color parsing and conversion using fatih/color library
+// Moved from: color.go
+type ColorConverter struct{}
+
 // NewColorConverter creates a new color converter with ANSI256 profile
 // NewColorConverter creates a new color converter
 // Moved from: color.go

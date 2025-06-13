@@ -7,10 +7,38 @@ import (
 	"io"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/opd-ai/go-gamelaunch-client/pkg/dgclient"
 )
+
+// WebView implements dgclient.View for web browser rendering
+// Moved from: view.go
+type WebView struct {
+	mu           sync.RWMutex
+	buffer       [][]Cell
+	width        int
+	height       int
+	cursorX      int
+	cursorY      int
+	inputChan    chan []byte
+	updateNotify chan struct{}
+	stateManager *StateManager
+	tileset      *TilesetConfig
+
+	// ANSI parsing state - simplified with library integration
+	currentFgColor string
+	currentBgColor string
+	currentBold    bool
+	currentInverse bool
+	currentBlink   bool
+	escapeBuffer   []byte
+	inEscapeSeq    bool
+
+	// Color converter using fatih/color library
+	colorConverter *ColorConverter
+}
 
 // NewWebView creates a new web-based view
 // Moved from: view.go

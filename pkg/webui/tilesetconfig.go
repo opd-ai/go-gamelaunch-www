@@ -15,6 +15,23 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// TilesetConfig represents a tileset configuration
+// Moved from: tileset.go
+type TilesetConfig struct {
+	Name         string        `yaml:"name"`
+	Version      string        `yaml:"version"`
+	TileWidth    int           `yaml:"tile_width"`
+	TileHeight   int           `yaml:"tile_height"`
+	SourceImage  string        `yaml:"source_image"`
+	Mappings     []TileMapping `yaml:"mappings"`
+	SpecialTiles []SpecialTile `yaml:"special_tiles"`
+
+	// Runtime data
+	mappingIndex map[rune]*TileMapping
+	imageData    image.Image
+	basePath     string // Base path for resolving relative image paths
+}
+
 // LoadTilesetConfig loads a tileset from a YAML file
 // Moved from: tileset.go
 func LoadTilesetConfig(path string) (*TilesetConfig, error) {
