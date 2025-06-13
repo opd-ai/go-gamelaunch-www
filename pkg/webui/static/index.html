@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="dgamelaunch Web Client - Play terminal-based roguelike games remotely through your browser">
+    <meta name="keywords" content="dgamelaunch, nethack, roguelike, terminal, games, ssh">
+    <meta name="author" content="go-gamelaunch-client">
+    
+    <title>dgamelaunch Web Client</title>
+    
+    <!-- Favicon and app icons -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    
+    <!-- Main stylesheet -->
+    <link rel="stylesheet" href="/style.css">
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="/main.js" as="script" type="module">
+    <link rel="preload" href="/scripts/error-handler.js" as="script">
+    
+    <!-- Meta tags for web app behavior -->
+    <meta name="theme-color" content="#000000">
+    <meta name="color-scheme" content="dark light">
+    
+    <!-- Open Graph meta tags for social sharing -->
+    <meta property="og:title" content="dgamelaunch Web Client">
+    <meta property="og:description" content="Play terminal-based roguelike games remotely through your browser">
+    <meta property="og:type" content="website">
+</head>
+<body>
+    <!-- Skip links for accessibility -->
+    <a href="#dgamelaunch-client" class="skip-link">Skip to game client</a>
+    
+    <!-- Main Application Container -->
+    <div class="app-container">
+        <!-- Application Header -->
+        <header class="app-header" role="banner">
+            <h1 class="app-title">dgamelaunch Web Client</h1>
+            <div class="app-subtitle">Terminal Roguelike Gaming Portal</div>
+        </header>
+        
+        <!-- Main Content Area -->
+        <main class="app-main" role="main">
+            <!-- Game Client Container - Auto-initialized by main.js -->
+            <div id="dgamelaunch-client" 
+                 role="application" 
+                 aria-label="Terminal Game Client"
+                 tabindex="0">
+                
+                <!-- Initial Loading Screen -->
+                <div class="loading-screen" id="initial-loading">
+                    <div class="loading-spinner" aria-hidden="true"></div>
+                    <div class="loading-text">Initializing Game Client...</div>
+                    <div class="loading-details">
+                        Loading configuration and establishing connection to game server.
+                        <br>This may take a few moments depending on your connection speed.
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Error Template (Hidden by default, shown via JavaScript) -->
+    <template id="error-template">
+        <div class="error-screen">
+            <div class="error-icon" aria-hidden="true">⚠</div>
+            <div class="error-title">Connection Error</div>
+            <div class="error-message"></div>
+            <div class="error-actions">
+                <button class="error-button" id="reload-button">
+                    Reload Page
+                </button>
+                <button class="error-button" id="details-button">
+                    Show Details
+                </button>
+                <button class="error-button" id="console-button">
+                    Open Console
+                </button>
+            </div>
+        </div>
+    </template>
+    
+    <!-- Accessibility Announcements -->
+    <div id="aria-announcements" 
+         role="status" 
+         aria-live="polite" 
+         aria-atomic="true"
+         class="sr-only">
+    </div>
+    
+    <!-- External Scripts -->
+    <script src="/scripts/error-handler.js"></script>
+    <script src="/scripts/app-init.js"></script>
+    <script type="module" src="/main.js"></script>
+    <script src="/scripts/service-worker-init.js"></script>
+</body>
+</html>

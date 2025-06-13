@@ -1,0 +1,579 @@
+/**
+ * Main stylesheet for dgamelaunch web client
+ * Terminal-focused design with accessibility and responsive features
+ */
+
+/* CSS Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Consolas', 'Monaco', 'Liberation Mono', 'Lucida Console', monospace;
+    background-color: #000000;
+    color: #c0c0c0;
+    line-height: 1.4;
+}
+
+/* Main Layout */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+    background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%);
+}
+
+.app-header {
+    flex-shrink: 0;
+    padding: 12px 20px;
+    background: rgba(0, 0, 0, 0.8);
+    border-bottom: 1px solid #333;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+}
+
+.app-title {
+    font-size: 18px;
+    font-weight: bold;
+    color: #00ff00;
+    text-shadow: 0 0 5px rgba(0, 255, 0, 0.3);
+    margin: 0;
+}
+
+.app-subtitle {
+    font-size: 12px;
+    color: #888;
+    margin-top: 2px;
+}
+
+.app-main {
+    flex: 1;
+    display: flex;
+    min-height: 0; /* Allow flex item to shrink */
+    position: relative;
+}
+
+/* Game Display Container */
+#dgamelaunch-client {
+    flex: 1;
+    position: relative;
+    background: #000000;
+    border: 1px solid #333;
+    border-radius: 4px;
+    margin: 8px;
+    overflow: hidden;
+}
+
+/* Loading States */
+.loading-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.9);
+    color: #00ff00;
+    font-family: monospace;
+    z-index: 1000;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid #333;
+    border-top: 3px solid #00ff00;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+.loading-text {
+    font-size: 14px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+
+.loading-details {
+    font-size: 11px;
+    color: #888;
+    text-align: center;
+    max-width: 400px;
+    line-height: 1.4;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Error States */
+.error-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.95);
+    color: #ff4444;
+    font-family: monospace;
+    z-index: 1001;
+    padding: 20px;
+}
+
+.error-icon {
+    font-size: 48px;
+    margin-bottom: 20px;
+    color: #ff4444;
+}
+
+.error-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.error-message {
+    font-size: 14px;
+    text-align: center;
+    margin-bottom: 20px;
+    max-width: 500px;
+    line-height: 1.4;
+}
+
+.error-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.error-button {
+    padding: 8px 16px;
+    background: #333;
+    border: 1px solid #555;
+    color: #c0c0c0;
+    cursor: pointer;
+    border-radius: 3px;
+    font-family: monospace;
+    font-size: 12px;
+    transition: all 0.2s ease;
+}
+
+.error-button:hover {
+    background: #444;
+    border-color: #777;
+}
+
+.error-button:active {
+    background: #222;
+}
+
+/* Focus Styles for Accessibility */
+.error-button:focus {
+    outline: 2px solid #00ff00;
+    outline-offset: 2px;
+}
+
+/* Game Display Components */
+.game-display {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100%;
+    background-color: #000000;
+    overflow: hidden;
+}
+
+.game-display__canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    cursor: default;
+}
+
+.game-display__status {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 10;
+}
+
+.game-display__performance {
+    padding: 8px;
+    background: rgba(0, 0, 0, 0.8);
+    color: #00ff00;
+    font-family: monospace;
+    font-size: 11px;
+    border-radius: 4px;
+    min-width: 200px;
+}
+
+/* Connection Status Components */
+.connection-status {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.connection-status__indicator {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    font-family: monospace;
+    font-size: 14px;
+    border-radius: 4px;
+    border: 1px solid #dee2e6;
+    position: relative;
+    cursor: default;
+    user-select: none;
+    transition: all 0.3s ease;
+}
+
+.status-indicator--small {
+    padding: 4px 8px;
+    font-size: 12px;
+}
+
+.status-indicator--large {
+    padding: 8px 16px;
+    font-size: 16px;
+}
+
+.status-indicator__icon {
+    font-size: 16px;
+    line-height: 1;
+    transition: transform 0.2s ease;
+}
+
+.status-indicator__tooltip {
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 5px;
+    padding: 8px 12px;
+    background: #000;
+    color: #fff;
+    font-size: 12px;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.status-indicator__tooltip::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid #000;
+}
+
+/* Status indicator states */
+.status-indicator--disconnected {
+    color: #6c757d;
+    background-color: #f8f9fa;
+    border-color: #6c757d;
+}
+
+.status-indicator--connecting {
+    color: #ffc107;
+    background-color: #fff3cd;
+    border-color: #ffc107;
+}
+
+.status-indicator--connected {
+    color: #17a2b8;
+    background-color: #d1ecf1;
+    border-color: #17a2b8;
+}
+
+.status-indicator--authenticated {
+    color: #28a745;
+    background-color: #d4edda;
+    border-color: #28a745;
+}
+
+.status-indicator--playing {
+    color: #28a745;
+    background-color: #d4edda;
+    border-color: #28a745;
+}
+
+.status-indicator--error {
+    color: #dc3545;
+    background-color: #f8d7da;
+    border-color: #dc3545;
+}
+
+.status-indicator--reconnecting {
+    color: #fd7e14;
+    background-color: #ffeaa7;
+    border-color: #fd7e14;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .app-header {
+        padding: 8px 12px;
+    }
+    
+    .app-title {
+        font-size: 16px;
+    }
+    
+    .app-subtitle {
+        font-size: 11px;
+    }
+    
+    #dgamelaunch-client {
+        margin: 4px;
+        border-radius: 2px;
+    }
+    
+    .loading-text, .error-title {
+        font-size: 16px;
+    }
+    
+    .loading-details, .error-message {
+        font-size: 12px;
+        padding: 0 10px;
+    }
+    
+    .game-display__status {
+        top: 4px;
+        right: 4px;
+        gap: 4px;
+    }
+    
+    .game-display__performance {
+        padding: 6px;
+        font-size: 10px;
+        min-width: 150px;
+    }
+}
+
+@media (max-width: 480px) {
+    .app-header {
+        padding: 6px 8px;
+    }
+    
+    .app-title {
+        font-size: 14px;
+    }
+    
+    .app-subtitle {
+        font-size: 10px;
+    }
+    
+    #dgamelaunch-client {
+        margin: 2px;
+    }
+    
+    .error-actions {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .error-button {
+        width: 150px;
+        text-align: center;
+    }
+    
+    .status-indicator {
+        padding: 4px 8px;
+        font-size: 12px;
+    }
+    
+    .status-indicator__icon {
+        font-size: 14px;
+    }
+}
+
+/* High Contrast Mode Support */
+@media (prefers-contrast: high) {
+    .app-container {
+        background: #000000;
+    }
+    
+    .app-header {
+        background: #000000;
+        border-bottom-color: #ffffff;
+    }
+    
+    .app-title {
+        color: #ffffff;
+        text-shadow: none;
+    }
+    
+    #dgamelaunch-client {
+        border-color: #ffffff;
+    }
+    
+    .status-indicator {
+        border-color: #ffffff;
+    }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+    .loading-spinner {
+        animation: none;
+        border-top-color: #00ff00;
+    }
+    
+    .error-button,
+    .status-indicator,
+    .status-indicator__tooltip {
+        transition: none;
+    }
+    
+    .status-indicator__icon {
+        transition: none;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .app-container {
+        background: white;
+        color: black;
+    }
+    
+    .loading-screen,
+    .error-screen,
+    .game-display__status {
+        display: none;
+    }
+    
+    .app-header {
+        background: white;
+        border-bottom-color: black;
+    }
+    
+    .app-title {
+        color: black;
+        text-shadow: none;
+    }
+}
+
+/* Dark/Light Theme Support */
+@media (prefers-color-scheme: light) {
+    html, body {
+        background-color: #ffffff;
+        color: #333333;
+    }
+    
+    .app-container {
+        background: linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%);
+        color: #333;
+    }
+    
+    .app-header {
+        background: rgba(255, 255, 255, 0.8);
+        border-bottom-color: #ccc;
+    }
+    
+    .app-title {
+        color: #007700;
+        text-shadow: 0 0 5px rgba(0, 119, 0, 0.3);
+    }
+    
+    .app-subtitle {
+        color: #666;
+    }
+    
+    #dgamelaunch-client {
+        background: #ffffff;
+        border-color: #ccc;
+    }
+    
+    .loading-screen {
+        background: rgba(255, 255, 255, 0.9);
+        color: #007700;
+    }
+    
+    .loading-spinner {
+        border-color: #ddd;
+        border-top-color: #007700;
+    }
+    
+    .loading-details {
+        color: #666;
+    }
+}
+
+/* Accessibility Helpers */
+.sr-only {
+    position: absolute;
+    left: -10000px;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+}
+
+/* Keyboard navigation indicators */
+*:focus {
+    outline: 2px solid #00ff00;
+    outline-offset: 2px;
+}
+
+/* Skip links for screen readers */
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 6px;
+    background: #000000;
+    color: #00ff00;
+    padding: 8px;
+    text-decoration: none;
+    border-radius: 4px;
+    z-index: 1000;
+}
+
+.skip-link:focus {
+    top: 6px;
+}
