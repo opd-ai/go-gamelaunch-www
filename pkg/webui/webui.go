@@ -27,35 +27,6 @@ var staticIndexJS embed.FS
 //go:embed static/style.css
 var staticIndexCSS string
 
-// WebUIOptions contains configuration for WebUI
-type WebUIOptions struct {
-	// View to use for rendering
-	View *WebView
-
-	// Tileset configuration
-	TilesetPath string
-	Tileset     *TilesetConfig
-
-	// Server configuration
-	ListenAddr  string
-	PollTimeout time.Duration
-
-	// CORS settings
-	AllowOrigins []string
-
-	// Static file serving
-	StaticPath string // Optional: override embedded files
-}
-
-// WebUI provides a web-based interface for dgclient
-type WebUI struct {
-	view       *WebView
-	tileset    *TilesetConfig
-	rpcHandler *RPCHandler
-	mux        *http.ServeMux
-	options    WebUIOptions
-}
-
 // NewWebUI creates a new WebUI instance
 func NewWebUI(opts WebUIOptions) (*WebUI, error) {
 	webui := &WebUI{
