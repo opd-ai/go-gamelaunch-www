@@ -18,6 +18,37 @@ import (
 	"github.com/opd-ai/go-gamelaunch-client/pkg/dgclient"
 )
 
+// WebUIOptions contains configuration for WebUI
+// Moved from: webui.go
+type WebUIOptions struct {
+	// View to use for rendering
+	View *WebView
+
+	// Tileset configuration
+	TilesetPath string
+	Tileset     *TilesetConfig
+
+	// Server configuration
+	ListenAddr  string
+	PollTimeout time.Duration
+
+	// CORS settings
+	AllowOrigins []string
+
+	// Static file serving
+	StaticPath string // Optional: override embedded files
+}
+
+// WebUI provides a web-based interface for dgclient
+// Moved from: webui.go
+type WebUI struct {
+	view       *WebView
+	tileset    *TilesetConfig
+	rpcHandler *RPCHandler
+	mux        *http.ServeMux
+	options    WebUIOptions
+}
+
 //go:embed static/index.html
 var staticIndexHTML string
 

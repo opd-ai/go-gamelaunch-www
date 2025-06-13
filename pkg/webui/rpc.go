@@ -5,39 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/http"
 	"time"
 
 	"github.com/gorilla/rpc/v2"
 	"github.com/gorilla/rpc/v2/json2"
 )
-
-// RPCRequest represents a JSON-RPC request
-// Legacy types preserved for compatibility
-// Moved from: rpc.go
-type RPCRequest struct {
-	JSONRPC string          `json:"jsonrpc"`
-	Method  string          `json:"method"`
-	Params  json.RawMessage `json:"params,omitempty"`
-	ID      interface{}     `json:"id"`
-}
-
-// RPCResponse represents a JSON-RPC response
-// Moved from: rpc.go
-type RPCResponse struct {
-	JSONRPC string      `json:"jsonrpc"`
-	Result  interface{} `json:"result,omitempty"`
-	Error   *RPCError   `json:"error,omitempty"`
-	ID      interface{} `json:"id"`
-}
-
-// RPCError represents a JSON-RPC error
-// Moved from: rpc.go
-type RPCError struct {
-	Code    int         `json:"code"`
-	Message string      `json:"message"`
-	Data    interface{} `json:"data,omitempty"`
-}
 
 // RPCHandler maintains compatibility with existing code
 // Moved from: rpc.go
@@ -45,53 +17,6 @@ type RPCHandler struct {
 	webui     *WebUI
 	rpcServer *rpc.Server
 }
-
-// GameService provides game-related RPC methods
-// Service structs for Gorilla RPC
-// Moved from: rpc.go
-type GameService struct {
-	handler *RPCHandler
-}
-
-// TilesetService provides tileset-related RPC methods
-// Moved from: rpc.go
-type TilesetService struct {
-	handler *RPCHandler
-}
-
-// SessionService provides session-related RPC methods
-// Moved from: rpc.go
-type SessionService struct {
-	handler *RPCHandler
-}
-
-// GamePollParams represents parameters for game polling
-// Parameter types for RPC methods
-// Moved from: rpc.go
-type GamePollParams struct {
-	Version uint64 `json:"version"`
-	Timeout int    `json:"timeout,omitempty"`
-}
-
-// GameInputParams represents parameters for game input
-// Moved from: rpc.go
-type GameInputParams struct {
-	Events []InputEvent `json:"events"`
-}
-
-// InputEvent represents a user input event
-// Moved from: rpc.go
-type InputEvent struct {
-	Type      string `json:"type"`
-	Key       string `json:"key,omitempty"`
-	KeyCode   int    `json:"keyCode,omitempty"`
-	Data      string `json:"data,omitempty"`
-	Timestamp int64  `json:"timestamp"`
-}
-
-// Empty represents an empty parameter set
-// Moved from: rpc.go
-type Empty struct{}
 
 // NewRPCHandler creates a new RPC handler with Gorilla RPC integration
 func NewRPCHandler(webui *WebUI) *RPCHandler {
@@ -203,69 +128,6 @@ func (h *RPCHandler) HandleRequest(ctx context.Context, req *RPCRequest) *RPCRes
 // GetRPCServer returns the underlying Gorilla RPC server for HTTP integration
 func (h *RPCHandler) GetRPCServer() *rpc.Server {
 	return h.rpcServer
-}
-
-// Gorilla RPC service methods - these delegate to existing handler methods
-
-// Game service methods
-func (s *GameService) GetState(r *http.Request, args *Empty, reply *map[string]interface{}) error {
-	result, err := s.handler.handleGameGetState(r.Context(), nil)
-	if err != nil {
-		return err
-	}
-	*reply = result.(map[string]interface{})
-	return nil
-}
-
-func (s *GameService) Poll(r *http.Request, args *GamePollParams, reply *map[string]interface{}) error {
-	paramsJSON, _ := json.Marshal(args)
-	result, err := s.handler.handleGamePoll(r.Context(), paramsJSON)
-	if err != nil {
-		return err
-	}
-	*reply = result.(map[string]interface{})
-	return nil
-}
-
-func (s *GameService) SendInput(r *http.Request, args *GameInputParams, reply *map[string]interface{}) error {
-	paramsJSON, _ := json.Marshal(args)
-	result, err := s.handler.handleGameSendInput(r.Context(), paramsJSON)
-	if err != nil {
-		return err
-	}
-	*reply = result.(map[string]interface{})
-	return nil
-}
-
-// Tileset service methods
-func (s *TilesetService) Fetch(r *http.Request, args *Empty, reply *map[string]interface{}) error {
-	result, err := s.handler.handleTilesetFetch(r.Context(), nil)
-	if err != nil {
-		return err
-	}
-	*reply = result.(map[string]interface{})
-	return nil
-}
-
-func (s *TilesetService) Update(r *http.Request, args *json.RawMessage, reply *map[string]interface{}) error {
-	result, err := s.handler.handleTilesetUpdate(r.Context(), *args)
-	if err != nil {
-		return err
-	}
-	if result != nil {
-		*reply = result.(map[string]interface{})
-	}
-	return nil
-}
-
-// Session service methods
-func (s *SessionService) Info(r *http.Request, args *Empty, reply *map[string]interface{}) error {
-	result, err := s.handler.handleSessionInfo(r.Context(), nil)
-	if err != nil {
-		return err
-	}
-	*reply = result.(map[string]interface{})
-	return nil
 }
 
 // Original handler methods preserved with all logging

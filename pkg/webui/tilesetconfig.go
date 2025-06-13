@@ -120,27 +120,6 @@ func DefaultTilesetConfig() *TilesetConfig {
 	return config
 }
 
-// isValidColor checks if a color string is in valid hex format
-// Moved from: tileset.go
-func isValidColor(color string) bool {
-	if !strings.HasPrefix(color, "#") {
-		return false
-	}
-
-	hex := color[1:]
-	if len(hex) != 3 && len(hex) != 6 {
-		return false
-	}
-
-	for _, c := range hex {
-		if !((c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')) {
-			return false
-		}
-	}
-
-	return true
-}
-
 // validate checks if the tileset configuration is valid
 // Moved from: tileset.go
 func (tc *TilesetConfig) validate() error {
@@ -413,4 +392,31 @@ func (tc *TilesetConfig) Clone() *TilesetConfig {
 	clone.buildIndex()
 
 	return clone
+}
+
+// TileMapping maps characters to tile coordinates
+// Moved from: tileset.go
+type TileMapping struct {
+	Char    string `yaml:"char"`
+	X       int    `yaml:"x"`
+	Y       int    `yaml:"y"`
+	FgColor string `yaml:"fg_color,omitempty"`
+	BgColor string `yaml:"bg_color,omitempty"`
+
+	// Runtime data
+	charRune rune
+}
+
+// SpecialTile represents multi-tile entities
+// Moved from: tileset.go
+type SpecialTile struct {
+	ID    string    `yaml:"id"`
+	Tiles []TileRef `yaml:"tiles"`
+}
+
+// TileRef references a specific tile
+// Moved from: tileset.go
+type TileRef struct {
+	X int `yaml:"x"`
+	Y int `yaml:"y"`
 }
