@@ -144,6 +144,10 @@ func TestSaveTilesetConfig_ValidConfig_CreatesValidFile(t *testing.T) {
 	tempDir := t.TempDir()
 	outputPath := filepath.Join(tempDir, "output.yaml")
 
+	// Create the test image file that the configuration references
+	imagePath := filepath.Join(tempDir, "test.png")
+	createTestImage(t, imagePath, 16, 8) // 2x1 tiles at 8x8 each = 16x8 total
+
 	// Create a test configuration
 	config := &TilesetConfig{
 		Name:        "Save Test",
