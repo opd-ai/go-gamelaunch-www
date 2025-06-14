@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/opd-ai/go-gamelaunch-client/pkg/dgclient"
 	"github.com/opd-ai/go-gamelaunch-www/pkg/webui"
@@ -57,6 +59,66 @@ func runConnect(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("username is required")
 	}
 
+	// Create WebView for the web interface
+	viewOpts := dgclient.DefaultViewOptions()
+	webView, err := webui.NewWebView(viewOpts)
+	if err != nil {
+		return fmt.Errorf("failed to create web view: %w", err)
+	}
+
+	// Load tileset if specified
+	var tilesetConfig *webui.TilesetConfig
+	if tilesetPath != "" {
+		tilesetConfig, err = webui.LoadTilesetConfig(tilesetPath)
+		if err != nil {
+			return fmt.Errorf("failed to load tileset: %w", err)
+		}
+	}
+
+	// Create WebUI server
+	webUIOptions := webui.WebUIOptions{
+		View:         webView,
+		TilesetPath:  tilesetPath,
+		Tileset:      tilesetConfig,
+		ListenAddr:   fmt.Sprintf(":%d", webPort),
+		PollTimeout:  30 * time.Second,
+		AllowOrigins: []string{}, // Allow all origins for simplicity
+	}
+
+	webServer, err := webui.NewWebUI(webUIOptions)
+	if err != nil {
+		return fmt.Errorf("failed to create web server: %w", err)
+	}
+
+	// Create dgclient in a separate goroutine
+	go func() {
+		if err := runDGClient(host, user, actualPort, webView); err != nil {
+			log.Printf("dgclient error: %v", err)
+		}
+	}()
+
+	// Set up signal handling for graceful shutdown
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		fmt.Println("\nReceived interrupt signal, shutting down...")
+		cancel()
+	}()
+
+	// Start the web server
+	fmt.Printf("Starting web server on :%d\n", webPort)
+	fmt.Printf("Connect to http://localhost:%d to play games\n", webPort)
+	fmt.Printf("Game server: %s@%s:%d\n", user, host, actualPort)
+
+	return webServer.StartWithContext(ctx, fmt.Sprintf(":%d", webPort))
+}
+
+// runDGClient handles the dgclient connection in a separate goroutine
+func runDGClient(host, user string, actualPort int, view *webui.WebView) error {
 	// Create client configuration
 	clientConfig := dgclient.DefaultClientConfig()
 	clientConfig.Debug = debug
@@ -73,13 +135,7 @@ func runConnect(cmd *cobra.Command, args []string) error {
 	client := dgclient.NewClient(clientConfig)
 	defer client.Close()
 
-	// Set up view
-	viewOpts := dgclient.DefaultViewOptions()
-	view, err := webui.NewTerminalView(viewOpts)
-	if err != nil {
-		return fmt.Errorf("failed to create terminal view: %w", err)
-	}
-
+	// Set the WebView on the client
 	if err := client.SetView(view); err != nil {
 		return fmt.Errorf("failed to set view: %w", err)
 	}
@@ -90,25 +146,17 @@ func runConnect(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to get authentication method: %w", err)
 	}
 
-	// Connect
+	// Connect to game server
 	fmt.Printf("Connecting to %s@%s:%d...\n", user, host, actualPort)
 	if err := client.Connect(host, actualPort, auth); err != nil {
 		return fmt.Errorf("connection failed: %w", err)
 	}
 
-	fmt.Println("Connected successfully!")
+	fmt.Println("Connected to game server successfully!")
 
-	// Set up signal handling
+	// Set up context for client management
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-sigCh
-		fmt.Println("\nReceived interrupt signal, disconnecting...")
-		cancel()
-	}()
 
 	// Launch game if specified
 	if gameName != "" {

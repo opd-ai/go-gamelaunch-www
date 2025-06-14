@@ -18,11 +18,13 @@ var (
 	cfgFile string
 
 	// Command flags
-	port     int
-	keyPath  string
-	password string
-	gameName string
-	debug    bool
+	port        int
+	webPort     int
+	keyPath     string
+	password    string
+	gameName    string
+	debug       bool
+	tilesetPath string
 )
 
 func main() {
@@ -33,16 +35,19 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "dgconnect [user@]host",
-	Short: "Connect to dgamelaunch SSH servers",
-	Long: `dgconnect is a client for connecting to dgamelaunch-style SSH servers
-to play terminal-based roguelike games remotely.
+	Use:   "dgconnect-www [user@]host",
+	Short: "Web-based interface for dgamelaunch SSH servers",
+	Long: `dgconnect-www is a web-based client for connecting to dgamelaunch-style SSH servers
+to play terminal-based roguelike games remotely through a modern browser interface.
+
+The application starts a web server that provides a browser-based interface for playing
+terminal games with optional tileset graphics support.
 
 Examples:
-  dgconnect user@nethack.example.com
-  dgconnect user@server.example.com --port 2022 --key ~/.ssh/id_rsa
-  dgconnect --config ~/.dgconnect.yaml nethack-server
-  dgconnect user@server.example.com --game nethack`,
+  dgconnect-www user@nethack.example.com
+  dgconnect-www user@server.example.com --port 2022 --web-port 8080
+  dgconnect-www --config ~/.dgconnect.yaml nethack-server --tileset tiles.yaml
+  dgconnect-www user@server.example.com --game nethack --web-port 3000`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runConnect,
 }
@@ -56,9 +61,11 @@ func init() {
 
 	// Connection flags
 	rootCmd.Flags().IntVarP(&port, "port", "p", 22, "SSH port")
+	rootCmd.Flags().IntVarP(&webPort, "web-port", "w", 8080, "Web server port")
 	rootCmd.Flags().StringVarP(&keyPath, "key", "k", "", "SSH private key path")
 	rootCmd.Flags().StringVar(&password, "password", "", "SSH password (use with caution)")
 	rootCmd.Flags().StringVarP(&gameName, "game", "g", "", "game to launch directly")
+	rootCmd.Flags().StringVarP(&tilesetPath, "tileset", "t", "", "path to tileset configuration file")
 
 	// Version command
 	rootCmd.AddCommand(&cobra.Command{
