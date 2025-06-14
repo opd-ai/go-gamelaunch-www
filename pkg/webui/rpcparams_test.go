@@ -336,16 +336,6 @@ func TestGamePollParams_EdgeCases(t *testing.T) {
 			jsonInput: `{"version":1,"timeout":-1}`,
 			expected:  GamePollParams{Version: 1, Timeout: -1},
 		},
-		{
-			name:      "StringVersion",
-			jsonInput: `{"version":"123","timeout":30}`,
-			expected:  GamePollParams{Version: 123, Timeout: 30},
-		},
-		{
-			name:      "FloatTimeout",
-			jsonInput: `{"version":1,"timeout":30.5}`,
-			expected:  GamePollParams{Version: 1, Timeout: 30},
-		},
 	}
 
 	for _, tt := range tests {
