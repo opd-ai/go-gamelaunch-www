@@ -150,7 +150,7 @@ func TestColor256ToRGB_216ColorCube_ReturnsCalculatedRGB(t *testing.T) {
 		{"cube green", 22, 0, 51, 0},       // (0,1,0) * 51
 		{"cube blue", 17, 0, 0, 51},        // (0,0,1) * 51
 		{"cube white", 231, 255, 255, 255}, // (5,5,5) * 51
-		{"cube mid", 100, 102, 51, 102},    // calculated for index 100
+		{"cube mid", 100, 102, 102, 0},     // calculated for index 100: (2,2,0) * 51
 	}
 
 	for _, tt := range tests {
