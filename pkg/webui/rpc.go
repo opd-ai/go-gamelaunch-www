@@ -29,7 +29,7 @@ func NewRPCHandler(webui *WebUI) *RPCHandler {
 
 	// Register services
 	gameService := &GameService{handler: handler}
-	tilesetService := &TilesetService{handler: handler}
+	tilesetService := NewTilesetService(handler) // Use enhanced tileset service
 	sessionService := &SessionService{handler: handler}
 
 	rpcServer.RegisterService(gameService, "game")

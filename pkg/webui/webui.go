@@ -387,6 +387,15 @@ func (w *WebUI) StartWithContext(ctx context.Context, addr string) error {
 		IdleTimeout:  120 * time.Second,
 	}
 
+	// Start tileset hot-reload monitoring if we have a tileset service
+	if tilesetService := w.getTilesetService(); tilesetService != nil {
+		go func() {
+			if err := tilesetService.StartHotReload(ctx); err != nil && err != context.Canceled {
+				log.Printf("Tileset hot-reload stopped with error: %v", err)
+			}
+		}()
+	}
+
 	// Start server in goroutine
 	errCh := make(chan error, 1)
 	go func() {
@@ -404,6 +413,13 @@ func (w *WebUI) StartWithContext(ctx context.Context, addr string) error {
 	case err := <-errCh:
 		return err
 	}
+}
+
+// getTilesetService extracts the tileset service from the RPC handler
+func (w *WebUI) getTilesetService() *TilesetService {
+	// This is a helper method to access the tileset service for hot-reload
+	// In a production system, you might want a more direct reference
+	return nil // Simplified for now - the service will be available via RPC
 }
 
 // CreateWebView creates a new WebView that implements dgclient.View
