@@ -1,0 +1,179 @@
+tileset:
+  name: "Enhanced Roguelike Classic"
+  version: "2.1.0"
+  tile_width: 16
+  tile_height: 16
+  source_image: "enhanced_classic.png"
+  
+  # Character-to-tile mappings
+  mappings:
+    # Player characters
+    - char: "@"
+      x: 0
+      y: 0
+      fg_color: "#FFFFFF"
+      bg_color: "#000000"
+    
+    # Terrain
+    - char: "."
+      x: 1
+      y: 0
+      fg_color: "#888888"
+      bg_color: "#000000"
+    
+    - char: "#"
+      x: 2
+      y: 0
+      fg_color: "#AAAAAA"
+      bg_color: "#000000"
+    
+    - char: "+"
+      x: 3
+      y: 0
+      fg_color: "#8B4513"
+      bg_color: "#000000"
+    
+    - char: "'"
+      x: 4
+      y: 0
+      fg_color: "#90EE90"
+      bg_color: "#000000"
+    
+    # Monsters
+    - char: "d"
+      x: 0
+      y: 1
+      fg_color: "#FF0000"
+      bg_color: "#000000"
+    
+    - char: "k"
+      x: 1
+      y: 1
+      fg_color: "#00FF00"
+      bg_color: "#000000"
+    
+    - char: "D"
+      x: 2
+      y: 1
+      fg_color: "#FF4500"
+      bg_color: "#000000"
+    
+    - char: "g"
+      x: 3
+      y: 1
+      fg_color: "#32CD32"
+      bg_color: "#000000"
+    
+    # Items
+    - char: "!"
+      x: 0
+      y: 2
+      fg_color: "#FF69B4"
+      bg_color: "#000000"
+    
+    - char: "?"
+      x: 1
+      y: 2
+      fg_color: "#87CEEB"
+      bg_color: "#000000"
+    
+    - char: "="
+      x: 2
+      y: 2
+      fg_color: "#FFD700"
+      bg_color: "#000000"
+    
+    - char: "["
+      x: 3
+      y: 2
+      fg_color: "#C0C0C0"
+      bg_color: "#000000"
+    
+    - char: "]"
+      x: 4
+      y: 2
+      fg_color: "#C0C0C0"
+      bg_color: "#000000"
+    
+    # Special characters
+    - char: " "
+      x: 5
+      y: 2
+      fg_color: "#000000"
+      bg_color: "#000000"
+    
+    - char: "*"
+      x: 0
+      y: 3
+      fg_color: "#FFFF00"
+      bg_color: "#000000"
+    
+    - char: "$"
+      x: 1
+      y: 3
+      fg_color: "#FFD700"
+      bg_color: "#000000"
+    
+    # Stairs and exits
+    - char: "<"
+      x: 2
+      y: 3
+      fg_color: "#FFFFFF"
+      bg_color: "#000000"
+    
+    - char: ">"
+      x: 3
+      y: 3
+      fg_color: "#FFFFFF"
+      bg_color: "#000000"
+    
+    # Water and special terrain
+    - char: "~"
+      x: 4
+      y: 3
+      fg_color: "#0000FF"
+      bg_color: "#000040"
+    
+    - char: "^"
+      x: 5
+      y: 3
+      fg_color: "#FF0000"
+      bg_color: "#000000"
+    
+  # Multi-tile special entities for advanced rendering
+  special_tiles:
+    - id: "large_dragon"
+      tiles:
+        - x: 0
+          y: 4
+        - x: 1
+          y: 4
+        - x: 0
+          y: 5
+        - x: 1
+          y: 5
+    
+    - id: "shop_entrance"
+      tiles:
+        - x: 2
+          y: 4
+        - x: 3
+          y: 4
+    
+    - id: "treasure_chest"
+      tiles:
+        - x: 4
+          y: 4
+        - x: 5
+          y: 4
+    
+    - id: "magic_portal"
+      tiles:
+        - x: 0
+          y: 6
+        - x: 1
+          y: 6
+        - x: 0
+          y: 7
+        - x: 1
+          y: 7
