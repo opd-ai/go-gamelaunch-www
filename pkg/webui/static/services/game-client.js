@@ -491,7 +491,7 @@ class GameClient {
   }
 
   /**
-   * Starts the state polling loop
+   * Starts the state polling loop with adaptive intervals
    * @private
    */
   _startPolling() {
@@ -500,6 +500,8 @@ class GameClient {
     }
 
     this.isPolling = true;
+    this.pollErrors = 0; // Track consecutive errors for backoff
+    this.maxPollErrors = 5;
     this._scheduleNextPoll();
 
     this.logger.debug(
@@ -524,7 +526,7 @@ class GameClient {
   }
 
   /**
-   * Schedules the next poll
+   * Schedules the next poll with exponential backoff on errors
    * @private
    */
   _scheduleNextPoll() {
@@ -532,13 +534,22 @@ class GameClient {
       return;
     }
 
+    // Calculate delay with exponential backoff for errors
+    let delay = this.pollInterval;
+    if (this.pollErrors > 0) {
+      delay = Math.min(
+        this.pollInterval * Math.pow(2, this.pollErrors),
+        30000 // Max 30 second delay
+      );
+    }
+
     this.pollTimer = setTimeout(() => {
       this._pollGameState();
-    }, this.pollInterval);
+    }, delay);
   }
 
   /**
-   * Polls the server for game state updates
+   * Polls the server for game state updates with long-polling
    * @private
    */
   async _pollGameState() {
@@ -547,12 +558,17 @@ class GameClient {
     }
 
     try {
+      // Use long-polling for more efficient updates
       const result = await this.rpcClient.call(RPCMethod.GET_STATE, {
         sessionId: this.sessionId,
-        version: this.lastStateVersion
+        version: this.lastStateVersion,
+        timeout: 25000 // Long-poll timeout
       });
 
-      if (result.state) {
+      // Reset error count on successful poll
+      this.pollErrors = 0;
+
+      if (result.state && result.state.version > this.lastStateVersion) {
         this._updateGameState(result.state);
       }
 
@@ -565,7 +581,15 @@ class GameClient {
         );
       }
     } catch (error) {
-      this.connectionManager.handleError(error, "poll");
+      this.pollErrors = Math.min(this.pollErrors + 1, this.maxPollErrors);
+      
+      this.logger.warn("_pollGameState", 
+        `Poll failed (${this.pollErrors}/${this.maxPollErrors})`, error);
+      
+      // Only trigger connection error handling for persistent failures
+      if (this.pollErrors >= 3) {
+        this.connectionManager.handleError(error, "poll");
+      }
     }
 
     // Schedule next poll
@@ -624,7 +648,7 @@ class GameClient {
   }
 
   /**
-   * Sends input events to the server
+   * Sends input events to the server with batching and retry logic
    * @param {Array<InputEvent>} events - Input events to send
    * @private
    */
@@ -633,33 +657,78 @@ class GameClient {
       return;
     }
 
-    try {
-      const inputData = events.map(event => event.toJSON());
+    const inputData = events.map(event => ({
+      ...event.toJSON(),
+      // Add terminal sequence mapping
+      sequence: this._mapToTerminalSequence(event)
+    }));
 
-      await this.rpcClient.call(RPCMethod.SEND_INPUT, {
-        sessionId: this.sessionId,
-        events: inputData
-      });
+    const maxRetries = 2;
+    let attempt = 0;
 
-      // Mark events as sent
-      events.forEach(event => event.markProcessed(true));
+    while (attempt <= maxRetries) {
+      try {
+        await this.rpcClient.call(RPCMethod.SEND_INPUT, {
+          sessionId: this.sessionId,
+          events: inputData
+        });
 
-      this.logger.debug(
-        "_sendInputEvents",
-        `Sent ${events.length} input events`
-      );
-    } catch (error) {
-      this.logger.error(
-        "_sendInputEvents",
-        "Failed to send input events",
-        error
-      );
+        // Mark events as sent
+        events.forEach(event => event.markProcessed(true));
 
-      // Mark events as failed
-      events.forEach(event => event.markProcessed(false));
+        this.logger.debug(
+          "_sendInputEvents",
+          `Sent ${events.length} input events on attempt ${attempt + 1}`
+        );
+        break;
 
-      this.connectionManager.handleError(error, "input");
+      } catch (error) {
+        attempt++;
+        
+        if (attempt > maxRetries) {
+          this.logger.error(
+            "_sendInputEvents",
+            "Failed to send input events after retries",
+            error
+          );
+
+          // Mark events as failed
+          events.forEach(event => event.markProcessed(false));
+          this.connectionManager.handleError(error, "input");
+          break;
+        }
+
+        // Wait before retry with jitter
+        const delay = 100 * Math.pow(2, attempt) + Math.random() * 100;
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
+  }
+
+  /**
+   * Maps input events to terminal sequences with comprehensive key support
+   * @param {InputEvent} event - Input event to map
+   * @returns {string|null} Terminal sequence or null
+   * @private
+   */
+  _mapToTerminalSequence(event) {
+    if (!event.isKeyboardEvent() || event.type !== InputEventType.KEY_DOWN) {
+      return null;
+    }
+
+    // Use the terminal sequence from the event if available
+    const terminalSequence = event.getTerminalSequence();
+    if (terminalSequence) {
+      return terminalSequence;
+    }
+
+    // Fallback mapping for any missed keys
+    const fallbackMap = {
+      'Space': ' ',
+      'NumpadEnter': '\r'
+    };
+
+    return fallbackMap[event.key] || null;
   }
 
   /**
@@ -718,6 +787,49 @@ class GameClient {
   /**
    * Gets comprehensive client statistics
    * @returns {Object} Client statistics
+   */
+  getStats() {
+    return {
+      connection: this.connectionManager.getStats(),
+      session: {
+        sessionId: this.sessionId,
+        lastStateVersion: this.lastStateVersion,
+        isPolling: this.isPolling,
+        pollInterval: this.pollInterval
+      },
+      gameState: this.gameState.getStats(),
+      input: this.inputManager ? this.inputManager.getStats() : null
+    };
+  }
+
+  /**
+   * Destroys the client and cleans up resources
+   */
+  destroy() {
+    this.logger.enter("destroy");
+
+    this._stopPolling();
+
+    if (this.inputManager) {
+      this.inputManager.destroy();
+      this.inputManager = null;
+    }
+
+    if (this.sessionId) {
+      // Attempt to disconnect cleanly
+      this.disconnect().catch(error => {
+        this.logger.warn("destroy", "Clean disconnect failed", error);
+      });
+    }
+
+    this.logger.info("destroy", "Game client destroyed");
+  }
+}
+
+// Export public interface
+export { GameClient, ConnectionState, RPCMethod, RPCClient, ConnectionManager };
+
+console.log("[GameClient] Game client service module loaded successfully");
    */
   getStats() {
     return {

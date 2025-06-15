@@ -25,11 +25,11 @@ const InputEventType = {
 /**
  * @enum {string}
  * @readonly
- * @description Special key mappings for terminal game controls
+ * @description Special key mappings for terminal game controls with terminal sequences
  */
 const SpecialKeys = {
   ARROW_UP: "ArrowUp",
-  ARROW_DOWN: "ArrowDown",
+  ARROW_DOWN: "ArrowDown", 
   ARROW_LEFT: "ArrowLeft",
   ARROW_RIGHT: "ArrowRight",
   ENTER: "Enter",
@@ -41,7 +41,54 @@ const SpecialKeys = {
   HOME: "Home",
   END: "End",
   PAGE_UP: "PageUp",
-  PAGE_DOWN: "PageDown"
+  PAGE_DOWN: "PageDown",
+  INSERT: "Insert",
+  F1: "F1",
+  F2: "F2",
+  F3: "F3",
+  F4: "F4",
+  F5: "F5",
+  F6: "F6",
+  F7: "F7",
+  F8: "F8",
+  F9: "F9",
+  F10: "F10",
+  F11: "F11",
+  F12: "F12"
+};
+
+/**
+ * @enum {string}
+ * @readonly
+ * @description Terminal escape sequences for special keys
+ */
+const TerminalSequences = {
+  ARROW_UP: '\x1b[A',
+  ARROW_DOWN: '\x1b[B',
+  ARROW_RIGHT: '\x1b[C',
+  ARROW_LEFT: '\x1b[D',
+  HOME: '\x1b[H',
+  END: '\x1b[F',
+  PAGE_UP: '\x1b[5~',
+  PAGE_DOWN: '\x1b[6~',
+  INSERT: '\x1b[2~',
+  DELETE: '\x1b[3~',
+  F1: '\x1bOP',
+  F2: '\x1bOQ',
+  F3: '\x1bOR',
+  F4: '\x1bOS',
+  F5: '\x1b[15~',
+  F6: '\x1b[17~',
+  F7: '\x1b[18~',
+  F8: '\x1b[19~',
+  F9: '\x1b[20~',
+  F10: '\x1b[21~',
+  F11: '\x1b[23~',
+  F12: '\x1b[24~',
+  ENTER: '\r',
+  ESCAPE: '\x1b',
+  BACKSPACE: '\x08',
+  TAB: '\t'
 };
 
 /**
@@ -151,6 +198,72 @@ class InputEvent {
   }
 
   /**
+   * Gets the terminal sequence for this input event
+   * @returns {string|null} Terminal sequence or null if not applicable
+   */
+  getTerminalSequence() {
+    if (!this.isKeyboardEvent()) {
+      return null;
+    }
+
+    // Map key to terminal sequence
+    const keyToSequence = {
+      'ArrowUp': TerminalSequences.ARROW_UP,
+      'ArrowDown': TerminalSequences.ARROW_DOWN,
+      'ArrowLeft': TerminalSequences.ARROW_LEFT,
+      'ArrowRight': TerminalSequences.ARROW_RIGHT,
+      'Home': TerminalSequences.HOME,
+      'End': TerminalSequences.END,
+      'PageUp': TerminalSequences.PAGE_UP,
+      'PageDown': TerminalSequences.PAGE_DOWN,
+      'Insert': TerminalSequences.INSERT,
+      'Delete': TerminalSequences.DELETE,
+      'F1': TerminalSequences.F1,
+      'F2': TerminalSequences.F2,
+      'F3': TerminalSequences.F3,
+      'F4': TerminalSequences.F4,
+      'F5': TerminalSequences.F5,
+      'F6': TerminalSequences.F6,
+      'F7': TerminalSequences.F7,
+      'F8': TerminalSequences.F8,
+      'F9': TerminalSequences.F9,
+      'F10': TerminalSequences.F10,
+      'F11': TerminalSequences.F11,
+      'F12': TerminalSequences.F12,
+      'Enter': TerminalSequences.ENTER,
+      'Escape': TerminalSequences.ESCAPE,
+      'Backspace': TerminalSequences.BACKSPACE,
+      'Tab': TerminalSequences.TAB
+    };
+
+    // Handle special key sequences
+    if (keyToSequence[this.key]) {
+      return keyToSequence[this.key];
+    }
+
+    // Handle control characters (Ctrl+A = 1, Ctrl+B = 2, etc.)
+    if (this.ctrlKey && this.key.length === 1) {
+      const char = this.key.toLowerCase();
+      if (char >= 'a' && char <= 'z') {
+        const code = char.charCodeAt(0) - 96;
+        return String.fromCharCode(code);
+      }
+    }
+
+    // Handle alt sequences (Alt+char = ESC+char)
+    if (this.altKey && this.key.length === 1) {
+      return '\x1b' + this.key;
+    }
+
+    // Regular printable characters
+    if (this.key.length === 1 && !this.ctrlKey && !this.altKey && !this.metaKey) {
+      return this.key;
+    }
+
+    return null;
+  }
+
+  /**
    * Converts event to JSON representation for transmission
    * @returns {Object} JSON-serializable event data
    */
@@ -169,7 +282,8 @@ class InputEvent {
       y: this.y,
       button: this.button,
       hasModifiers: this.hasModifiers,
-      isSpecialKey: this.isSpecialKey
+      isSpecialKey: this.isSpecialKey,
+      terminalSequence: this.getTerminalSequence() // Include terminal sequence
     };
   }
 
@@ -294,7 +408,7 @@ class InputBuffer {
   }
 
   /**
-   * Flushes pending events from the buffer
+   * Flushes pending events from the buffer with deduplication
    * @param {boolean} [force=false] - Whether to flush even if buffer is small
    * @returns {Array<InputEvent>} Array of events that were flushed
    */
@@ -304,18 +418,22 @@ class InputBuffer {
       return [];
     }
 
-    // Don't flush small batches unless forced
+    // Don't flush small batches unless forced or timeout reached
+    const timeSinceLastFlush = Date.now() - this.lastFlushTime;
     if (
       !force &&
       this.events.length < 3 &&
-      Date.now() - this.lastFlushTime < this.flushInterval * 2
+      timeSinceLastFlush < this.flushInterval * 2
     ) {
       this.logger.debug("flush", "Deferring flush for larger batch");
       return [];
     }
 
     const batchSize = Math.min(this.events.length, this.maxBatchSize);
-    const flushedEvents = this.events.splice(0, batchSize);
+    let flushedEvents = this.events.splice(0, batchSize);
+
+    // Deduplicate rapid key repeats (common in games)
+    flushedEvents = this._deduplicateEvents(flushedEvents);
 
     this.totalFlushed += flushedEvents.length;
     this.lastFlushTime = Date.now();
@@ -349,6 +467,54 @@ class InputBuffer {
     }
 
     return flushedEvents;
+  }
+
+  /**
+   * Deduplicates rapid key repeat events to reduce server load
+   * @param {Array<InputEvent>} events - Events to deduplicate
+   * @returns {Array<InputEvent>} Deduplicated events
+   * @private
+   */
+  _deduplicateEvents(events) {
+    if (events.length <= 1) {
+      return events;
+    }
+
+    const deduplicated = [];
+    let lastEvent = null;
+    const rapidThreshold = 50; // ms
+
+    for (const event of events) {
+      if (!lastEvent) {
+        deduplicated.push(event);
+        lastEvent = event;
+        continue;
+      }
+
+      // Check for rapid key repeats of the same key
+      const timeDiff = event.timestamp - lastEvent.timestamp;
+      const isSameKey = event.key === lastEvent.key && 
+                       event.type === lastEvent.type &&
+                       event.ctrlKey === lastEvent.ctrlKey &&
+                       event.altKey === lastEvent.altKey &&
+                       event.shiftKey === lastEvent.shiftKey;
+
+      if (isSameKey && timeDiff < rapidThreshold) {
+        // Skip this rapid repeat, but update timestamp of last event
+        lastEvent.timestamp = event.timestamp;
+        continue;
+      }
+
+      deduplicated.push(event);
+      lastEvent = event;
+    }
+
+    if (deduplicated.length < events.length) {
+      this.logger.debug("_deduplicateEvents", 
+        `Deduplicated ${events.length - deduplicated.length} rapid key repeats`);
+    }
+
+    return deduplicated;
   }
 
   /**
@@ -1108,14 +1274,15 @@ class InputManager {
   }
 }
 
-// Export public interface
+// Export updated interface
 export {
   InputManager,
   InputEvent,
   InputBuffer,
   InputStatistics,
   InputEventType,
-  SpecialKeys
+  SpecialKeys,
+  TerminalSequences
 };
 
 console.log("[InputManager] Input management module loaded successfully");

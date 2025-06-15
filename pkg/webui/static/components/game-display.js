@@ -425,6 +425,14 @@ class TerminalRenderer {
       textChars: 0
     };
 
+    // Performance optimizations
+    this.dirtyRegions = new Set(); // Track dirty cells for partial updates
+    this.renderCache = new Map(); // Cache rendered cell data
+    this.maxCacheSize = 1000;
+    this.lastFrameTime = 0;
+    this.targetFPS = 60;
+    this.frameInterval = 1000 / this.targetFPS;
+
     this._initializeRenderer();
 
     this.logger.info("constructor", "Terminal renderer initialized", {
@@ -502,7 +510,38 @@ class TerminalRenderer {
   }
 
   /**
-   * Renders a complete game state to the canvas
+   * Gets the current cell dimensions
+   * @returns {Object} Cell dimensions {width, height}
+   */
+  getCellDimensions() {
+    return {
+      width: this.cellWidth,
+      height: this.cellHeight
+    };
+  }
+
+  /**
+   * Gets performance statistics for monitoring
+   * @returns {Object} Performance metrics
+   */
+  getPerformanceStats() {
+    const now = performance.now();
+    const timeSinceLastFrame = now - this.lastFrameTime;
+    const fps = timeSinceLastFrame > 0 ? 1000 / timeSinceLastFrame : 0;
+
+    return {
+      fps: Math.min(fps, this.targetFPS),
+      lastFrameTime: timeSinceLastFrame,
+      averageFrameTime: this.averageFrameTime,
+      frameCount: this.frameCount,
+      renderStats: { ...this.renderStats },
+      cacheSize: this.renderCache.size,
+      dirtyRegions: this.dirtyRegions.size
+    };
+  }
+
+  /**
+   * Renders a complete game state to the canvas with dirty region optimization
    * @param {GameState} gameState - Game state to render
    * @param {Object} [transform] - Viewport transformation parameters
    */
@@ -512,7 +551,14 @@ class TerminalRenderer {
       return;
     }
 
-    const startTime = performance.now();
+    const now = performance.now();
+    
+    // Frame rate limiting
+    if (now - this.lastFrameTime < this.frameInterval) {
+      return; // Skip frame to maintain target FPS
+    }
+
+    const startTime = now;
     this.frameCount++;
 
     // Reset render statistics
@@ -524,11 +570,15 @@ class TerminalRenderer {
         this._applyTransform(transform);
       }
 
-      // Clear canvas
-      this._clearCanvas(gameState);
-
-      // Render game content based on current mode
-      this._renderGameContent(gameState);
+      // Only clear dirty regions instead of entire canvas
+      if (this.dirtyRegions.size > 0) {
+        this._clearDirtyRegions(gameState);
+        this._renderDirtyRegions(gameState);
+      } else {
+        // Full render on first frame or when no dirty tracking
+        this._clearCanvas(gameState);
+        this._renderGameContent(gameState);
+      }
 
       // Render cursor if visible
       if (gameState.cursor && gameState.cursor.visible) {
@@ -543,6 +593,7 @@ class TerminalRenderer {
       // Update performance metrics
       const frameTime = performance.now() - startTime;
       this._updatePerformanceMetrics(frameTime);
+      this.lastFrameTime = now;
 
       this.logger.debug(
         "render",
@@ -555,28 +606,219 @@ class TerminalRenderer {
   }
 
   /**
-   * Applies viewport transformation to rendering context
-   * @param {Object} transform - Transformation parameters
-   * @private
-   */
-  _applyTransform(transform) {
-    this.context.save();
-    this.context.scale(transform.scale, transform.scale);
-    this.context.translate(-transform.offsetX, -transform.offsetY);
-  }
-
-  /**
-   * Clears the canvas with background color
+   * Clears only dirty regions of the canvas
    * @param {GameState} gameState - Game state for background color
    * @private
    */
+  _clearDirtyRegions(gameState) {
+    this.context.fillStyle = "#000000";
+    
+    for (const regionKey of this.dirtyRegions) {
+      const [x, y] = regionKey.split(',').map(Number);
+      const pixelX = x * this.cellWidth;
+      const pixelY = y * this.cellHeight;
+      
+      this.context.fillRect(pixelX, pixelY, this.cellWidth, this.cellHeight);
+    }
+  }
+
+  /**
+   * Renders only dirty regions of the game content
+   * @param {GameState} gameState - Game state to render
+   * @private
+   */
+  _renderDirtyRegions(gameState) {
+    const buffer = gameState.buffer;
+    if (!buffer || !buffer.length) {
+      return;
+    }
+
+    const useTileset =
+      (this.options.mode === RenderMode.TILESET ||
+        this.options.mode === RenderMode.HYBRID) &&
+      this.currentTileset &&
+      this.currentTileset.imageLoaded;
+
+    for (const regionKey of this.dirtyRegions) {
+      const [x, y] = regionKey.split(',').map(Number);
+      
+      if (x < gameState.width && y < gameState.height) {
+        const cell = gameState.getCell(x, y);
+        if (cell) {
+          this._renderCell(x, y, cell, useTileset);
+          this.renderStats.cellsRendered++;
+        }
+      }
+    }
+
+    // Clear dirty regions after rendering
+    this.dirtyRegions.clear();
+  }
+
+  /**
+   * Marks a cell region as dirty for next render
+   * @param {number} x - Cell X coordinate
+   * @param {number} y - Cell Y coordinate
+   */
+  markDirty(x, y) {
+    this.dirtyRegions.add(`${x},${y}`);
+  }
+
+  /**
+   * Renders a single game cell with caching
+   * @param {number} x - Cell X coordinate
+   * @param {number} y - Cell Y coordinate
+   * @param {GameCell} cell - Cell data to render
+   * @param {boolean} useTileset - Whether to attempt tileset rendering
+   * @private
+   */
+  _renderCell(x, y, cell, useTileset) {
+    const pixelX = x * this.cellWidth;
+    const pixelY = y * this.cellHeight;
+
+    // Generate cache key for this cell
+    const cacheKey = this._generateCellCacheKey(cell);
+    
+    // Check render cache first
+    let cachedRender = this.renderCache.get(cacheKey);
+    if (cachedRender) {
+      // Use cached render data
+      this._applyCachedRender(pixelX, pixelY, cachedRender);
+      return;
+    }
+
+    // Render background if not default
+    if (cell.bg_color && cell.bg_color !== "#000000") {
+      this._renderCellBackground(pixelX, pixelY, cell.bg_color);
+    }
+
+    // Choose rendering method and cache result
+    if (useTileset && cell.hasTileCoordinates()) {
+      const rendered = this._renderTilesetCell(pixelX, pixelY, cell);
+      if (rendered) {
+        this.renderStats.tilesUsed++;
+        this._cacheRender(cacheKey, 'tileset', cell);
+        return;
+      }
+    }
+
+    // Fall back to text rendering
+    this._renderTextCell(pixelX, pixelY, cell);
+    this._cacheRender(cacheKey, 'text', cell);
+    this.renderStats.textChars++;
+  }
+
+  /**
+   * Generates a cache key for a cell
+   * @param {GameCell} cell - Cell to generate key for
+   * @returns {string} Cache key
+   * @private
+   */
+  _generateCellCacheKey(cell) {
+    return `${cell.getDisplayChar()}_${cell.fg_color}_${cell.bg_color}_${cell.bold}_${cell.inverse}_${cell.tile_x}_${cell.tile_y}`;
+  }
+
+  /**
+   * Caches render data for a cell
+   * @param {string} cacheKey - Cache key
+   * @param {string} renderType - Type of render (text/tileset)
+   * @param {GameCell} cell - Original cell data
+   * @private
+   */
+  _cacheRender(cacheKey, renderType, cell) {
+    // Implement LRU cache eviction
+    if (this.renderCache.size >= this.maxCacheSize) {
+      const firstKey = this.renderCache.keys().next().value;
+      this.renderCache.delete(firstKey);
+    }
+
+    this.renderCache.set(cacheKey, {
+      type: renderType,
+      timestamp: Date.now(),
+      // Store minimal data needed for re-rendering
+      char: cell.getDisplayChar(),
+      fgColor: cell.fg_color,
+      bgColor: cell.bg_color,
+      tileX: cell.tile_x,
+      tileY: cell.tile_y
+    });
+  }
+
+  /**
+   * Applies cached render data
+   * @param {number} pixelX - Pixel X coordinate
+   * @param {number} pixelY - Pixel Y coordinate
+   * @param {Object} cachedRender - Cached render data
+   * @private
+   */
+  _applyCachedRender(pixelX, pixelY, cachedRender) {
+    // This is a simplified version - in practice you'd want to
+    // cache actual ImageData or rendering commands
+    if (cachedRender.type === 'tileset' && this.currentTileset) {
+      const sprite = this.currentTileset.getSprite(cachedRender.tileX, cachedRender.tileY);
+      if (sprite) {
+        const sourceCoords = sprite.getPixelCoordinates(
+          this.currentTileset.tile_width,
+          this.currentTileset.tile_height
+        );
+        
+        this.context.drawImage(
+          this.currentTileset.imageElement,
+          sourceCoords.x, sourceCoords.y, sourceCoords.width, sourceCoords.height,
+          pixelX, pixelY, this.cellWidth, this.cellHeight
+        );
+      }
+    } else {
+      // Re-render text (could be optimized further with pre-rendered glyphs)
+      this._renderTextCharacter(pixelX, pixelY, cachedRender.char, 
+                               cachedRender.fgColor, cachedRender.bgColor);
+    }
+  }
+
+  /**
+   * Renders a single text character (extracted for caching)
+   * @param {number} x - Pixel X coordinate
+   * @param {number} y - Pixel Y coordinate
+   * @param {string} char - Character to render
+   * @param {string} fgColor - Foreground color
+   * @param {string} bgColor - Background color
+   * @private
+   */
+  _renderTextCharacter(x, y, char, fgColor, bgColor) {
+    if (!char || char === " ") {
+      return;
+    }
+
+    // Render background
+    if (bgColor && bgColor !== "#000000") {
+      this.context.fillStyle = bgColor;
+      this.context.fillRect(x, y, this.cellWidth, this.cellHeight);
+    }
+
+    // Set text properties
+    this.context.fillStyle = fgColor || "#FFFFFF";
+    this.context.font = this.fontMetrics.font;
+
+    // Center character in cell
+    const textMetrics = this.context.measureText(char);
+    const textX = x + (this.cellWidth - textMetrics.width) / 2;
+    const textY = y + this.fontMetrics.baseline;
+
+    this.context.fillText(char, textX, textY);
+  }
+
+  /**
+   * Clears the entire canvas with optional background color
+   * @param {GameState} gameState - Game state for styling context
+   * @private
+   */
   _clearCanvas(gameState) {
-    this.context.fillStyle = "#000000"; // Default background
+    this.context.fillStyle = "#000000";
     this.context.fillRect(0, 0, this.canvas.width, this.canvas.height);
   }
 
   /**
-   * Renders game content based on current rendering mode
+   * Renders the complete game content
    * @param {GameState} gameState - Game state to render
    * @private
    */
@@ -586,7 +828,6 @@ class TerminalRenderer {
       return;
     }
 
-    // Determine rendering approach based on mode and available resources
     const useTileset =
       (this.options.mode === RenderMode.TILESET ||
         this.options.mode === RenderMode.HYBRID) &&
@@ -605,58 +846,69 @@ class TerminalRenderer {
   }
 
   /**
-   * Renders a single game cell
-   * @param {number} x - Cell X coordinate
-   * @param {number} y - Cell Y coordinate
-   * @param {GameCell} cell - Cell data to render
-   * @param {boolean} useTileset - Whether to attempt tileset rendering
+   * Renders the cursor at its current position
+   * @param {GameState} gameState - Game state containing cursor information
    * @private
    */
-  _renderCell(x, y, cell, useTileset) {
-    const pixelX = x * this.cellWidth;
-    const pixelY = y * this.cellHeight;
-
-    // Render background if not default
-    if (cell.bg_color && cell.bg_color !== "#000000") {
-      this._renderCellBackground(pixelX, pixelY, cell.bg_color);
+  _renderCursor(gameState) {
+    if (!gameState.cursor || !gameState.cursor.visible) {
+      return;
     }
 
-    // Choose rendering method
-    if (useTileset && cell.hasTileCoordinates()) {
-      const rendered = this._renderTilesetCell(pixelX, pixelY, cell);
-      if (rendered) {
-        this.renderStats.tilesUsed++;
-        return;
-      }
-    }
+    const cursorX = gameState.cursor.x * this.cellWidth;
+    const cursorY = gameState.cursor.y * this.cellHeight;
 
-    // Fall back to text rendering
-    this._renderTextCell(pixelX, pixelY, cell);
-    this.renderStats.textChars++;
+    // Simple cursor rendering - can be enhanced with blinking
+    this.context.strokeStyle = "#ffffff";
+    this.context.lineWidth = 2;
+    this.context.strokeRect(cursorX, cursorY, this.cellWidth, this.cellHeight);
   }
 
   /**
-   * Renders cell background color
-   * @param {number} x - Pixel X coordinate
-   * @param {number} y - Pixel Y coordinate
-   * @param {string} color - Background color
+   * Applies viewport transformation to the canvas context
+   * @param {Object} transform - Transformation parameters
    * @private
    */
-  _renderCellBackground(x, y, color) {
-    this.context.fillStyle = color;
-    this.context.fillRect(x, y, this.cellWidth, this.cellHeight);
+  _applyTransform(transform) {
+    this.context.save();
+    this.context.scale(transform.scale, transform.scale);
+    this.context.translate(-transform.offsetX, -transform.offsetY);
   }
 
   /**
-   * Renders a cell using tileset graphics
-   * @param {number} x - Pixel X coordinate
-   * @param {number} y - Pixel Y coordinate
-   * @param {GameCell} cell - Cell with tile coordinates
-   * @returns {boolean} True if successfully rendered with tileset
+   * Updates performance metrics
+   * @param {number} frameTime - Time taken for current frame
    * @private
    */
-  _renderTilesetCell(x, y, cell) {
-    if (!this.currentTileset || !this.currentTileset.imageLoaded) {
+  _updatePerformanceMetrics(frameTime) {
+    // Calculate rolling average frame time
+    this.averageFrameTime = this.averageFrameTime === 0 
+      ? frameTime 
+      : (this.averageFrameTime * 0.9 + frameTime * 0.1);
+  }
+
+  /**
+   * Renders cell background
+   * @param {number} pixelX - Pixel X coordinate
+   * @param {number} pixelY - Pixel Y coordinate
+   * @param {string} bgColor - Background color
+   * @private
+   */
+  _renderCellBackground(pixelX, pixelY, bgColor) {
+    this.context.fillStyle = bgColor;
+    this.context.fillRect(pixelX, pixelY, this.cellWidth, this.cellHeight);
+  }
+
+  /**
+   * Renders a tileset-based cell
+   * @param {number} pixelX - Pixel X coordinate
+   * @param {number} pixelY - Pixel Y coordinate
+   * @param {GameCell} cell - Cell to render
+   * @returns {boolean} True if successfully rendered
+   * @private
+   */
+  _renderTilesetCell(pixelX, pixelY, cell) {
+    if (!this.currentTileset || !cell.hasTileCoordinates()) {
       return false;
     }
 
@@ -665,178 +917,47 @@ class TerminalRenderer {
       return false;
     }
 
-    try {
-      const sourceCoords = sprite.getPixelCoordinates(
-        this.currentTileset.tile_width,
-        this.currentTileset.tile_height
-      );
+    const sourceCoords = sprite.getPixelCoordinates(
+      this.currentTileset.tile_width,
+      this.currentTileset.tile_height
+    );
 
+    try {
       this.context.drawImage(
         this.currentTileset.imageElement,
-        sourceCoords.x,
-        sourceCoords.y,
-        sourceCoords.width,
-        sourceCoords.height,
-        x,
-        y,
-        this.cellWidth,
-        this.cellHeight
+        sourceCoords.x, sourceCoords.y, sourceCoords.width, sourceCoords.height,
+        pixelX, pixelY, this.cellWidth, this.cellHeight
       );
-
       return true;
     } catch (error) {
-      this.logger.warn(
-        "_renderTilesetCell",
-        "Tileset rendering failed, falling back to text",
-        error
-      );
+      this.logger.warn("_renderTilesetCell", "Failed to render tileset cell", error);
       return false;
     }
   }
 
   /**
-   * Renders a cell using text characters
-   * @param {number} x - Pixel X coordinate
-   * @param {number} y - Pixel Y coordinate
-   * @param {GameCell} cell - Cell with character data
+   * Renders a text-based cell
+   * @param {number} pixelX - Pixel X coordinate
+   * @param {number} pixelY - Pixel Y coordinate
+   * @param {GameCell} cell - Cell to render
    * @private
    */
-  _renderTextCell(x, y, cell) {
-    const char = cell.getDisplayChar();
-    if (!char || char === " ") {
-      return;
-    }
-
-    // Set text properties
-    this.context.fillStyle = cell.fg_color || "#FFFFFF";
-    this.context.font = this.fontMetrics.font;
-
-    // Apply text styling
-    let font = this.fontMetrics.font;
-    if (cell.bold) {
-      font = "bold " + font;
-      this.context.font = font;
-    }
-
-    // Handle inverse video
-    if (cell.inverse) {
-      this._renderCellBackground(x, y, cell.fg_color || "#FFFFFF");
-      this.context.fillStyle = cell.bg_color || "#000000";
-    }
-
-    // Center character in cell
-    const textMetrics = this.context.measureText(char);
-    const textX = x + (this.cellWidth - textMetrics.width) / 2;
-    const textY = y + this.fontMetrics.baseline;
-
-    this.context.fillText(char, textX, textY);
-
-    // Handle blinking text (simple implementation)
-    if (cell.blink && Math.floor(Date.now() / 500) % 2 === 0) {
-      this.context.globalAlpha = 0.5;
-      this.context.fillText(char, textX, textY);
-      this.context.globalAlpha = 1.0;
-    }
-  }
-
-  /**
-   * Renders the game cursor
-   * @param {GameState} gameState - Game state with cursor information
-   * @private
-   */
-  _renderCursor(gameState) {
-    const cursor = gameState.cursor;
-    const x = cursor.x * this.cellWidth;
-    const y = cursor.y * this.cellHeight;
-
-    // Render cursor as animated outline
-    const alpha = 0.5 + 0.5 * Math.sin(Date.now() / 300); // Pulsing effect
-
-    this.context.save();
-    this.context.globalAlpha = alpha;
-    this.context.strokeStyle = "#FFFFFF";
-    this.context.lineWidth = 2;
-    this.context.strokeRect(
-      x + 1,
-      y + 1,
-      this.cellWidth - 2,
-      this.cellHeight - 2
+  _renderTextCell(pixelX, pixelY, cell) {
+    this._renderTextCharacter(
+      pixelX, pixelY, 
+      cell.getDisplayChar(), 
+      cell.fg_color, 
+      cell.bg_color
     );
-    this.context.restore();
   }
 
   /**
-   * Updates performance metrics for rendering
-   * @param {number} frameTime - Time taken for current frame in milliseconds
-   * @private
+   * Clears render cache to free memory
    */
-  _updatePerformanceMetrics(frameTime) {
-    this.lastFrameTime = frameTime;
-
-    // Calculate rolling average frame time
-    const alpha = 0.1; // Smoothing factor
-    this.averageFrameTime =
-      this.averageFrameTime * (1 - alpha) + frameTime * alpha;
-  }
-
-  /**
-   * Gets current rendering performance statistics
-   * @returns {Object} Performance statistics
-   */
-  getPerformanceStats() {
-    return {
-      frameCount: this.frameCount,
-      lastFrameTime: this.lastFrameTime,
-      averageFrameTime: this.averageFrameTime,
-      fps: this.averageFrameTime > 0 ? 1000 / this.averageFrameTime : 0,
-      renderStats: { ...this.renderStats },
-      mode: this.options.mode,
-      cellSize: `${this.cellWidth}x${this.cellHeight}`
-    };
-  }
-
-  /**
-   * Changes the rendering mode
-   * @param {string} mode - New rendering mode from RenderMode enum
-   */
-  setRenderMode(mode) {
-    if (Object.values(RenderMode).includes(mode)) {
-      this.options.mode = mode;
-      this.logger.info("setRenderMode", `Rendering mode changed to: ${mode}`);
-    } else {
-      this.logger.warn("setRenderMode", `Invalid rendering mode: ${mode}`);
-    }
-  }
-
-  /**
-   * Updates font settings and recalculates metrics
-   * @param {number} [fontSize] - New font size
-   * @param {string} [fontFamily] - New font family
-   */
-  updateFont(fontSize, fontFamily) {
-    if (fontSize !== undefined) {
-      this.options.fontSize = fontSize;
-    }
-    if (fontFamily !== undefined) {
-      this.options.fontFamily = fontFamily;
-    }
-
-    this._calculateFontMetrics();
-    this.logger.info("updateFont", "Font updated", {
-      fontSize: this.options.fontSize,
-      fontFamily: this.options.fontFamily
-    });
-  }
-
-  /**
-   * Gets current cell dimensions
-   * @returns {Object} Cell dimensions {width, height}
-   */
-  getCellDimensions() {
-    return {
-      width: this.cellWidth,
-      height: this.cellHeight
-    };
+  clearCache() {
+    this.renderCache.clear();
+    this.dirtyRegions.clear();
+    this.logger.debug("clearCache", "Render cache cleared");
   }
 }
 
@@ -1045,19 +1166,37 @@ class GameDisplay {
   }
 
   /**
-   * Handles game state updates from client
+   * Handles game state updates from client with dirty region tracking
    * @param {GameState} gameState - Updated game state
    * @private
    */
   _handleGameStateUpdate(gameState) {
+    if (!this.renderer) {
+      this.logger.warn("_handleGameStateUpdate", "Renderer not available");
+      return;
+    }
+
     // Update viewport content dimensions
     const cellDimensions = this.renderer.getCellDimensions();
-    this.viewport.updateContent(
-      gameState.width * cellDimensions.width,
-      gameState.height * cellDimensions.height,
-      cellDimensions.width,
-      cellDimensions.height
-    );
+    if (this.viewport) {
+      this.viewport.updateContent(
+        gameState.width * cellDimensions.width,
+        gameState.height * cellDimensions.height,
+        cellDimensions.width,
+        cellDimensions.height
+      );
+    }
+
+    // Mark changed cells as dirty for efficient rendering
+    if (gameState.changeTracker && gameState.changeTracker.hasChanges()) {
+      const changedCells = gameState.changeTracker.getChangedCells();
+      for (const {x, y} of changedCells) {
+        this.renderer.markDirty(x, y);
+      }
+      
+      // Clear the change tracker after processing
+      gameState.changeTracker.clearChanges();
+    }
 
     // Trigger render if we're actively rendering
     if (this.isRendering) {
@@ -1129,12 +1268,8 @@ class GameDisplay {
    * @private
    */
   _handleCanvasResize(rect) {
-    // Add null check as safety measure
     if (!this.canvasElement) {
-      this.logger.warn(
-        "_handleCanvasResize",
-        "Canvas element is null, cannot handle resize"
-      );
+      this.logger.warn("_handleCanvasResize", "Canvas element is null");
       return;
     }
 
@@ -1142,19 +1277,15 @@ class GameDisplay {
     this.canvasElement.width = rect.width;
     this.canvasElement.height = rect.height;
 
-    // Update viewport
-    this.viewport.updateContent(
-      this.canvasElement.width,
-      this.canvasElement.height
-    );
+    // Update viewport if available
+    if (this.viewport) {
+      this.viewport.updateContent(rect.width, rect.height);
+    }
 
     // Force re-render
     this.forceRender();
 
-    this.logger.debug(
-      "_handleCanvasResize",
-      `Canvas resized to ${rect.width}x${rect.height}`
-    );
+    this.logger.debug("_handleCanvasResize", `Canvas resized to ${rect.width}x${rect.height}`);
   }
 
   /**
@@ -1254,22 +1385,23 @@ class GameDisplay {
    * @private
    */
   _updatePerformanceDisplay() {
-    if (!this.performanceElement) {
+    if (!this.performanceElement || !this.renderer) {
       return;
     }
 
     const rendererStats = this.renderer.getPerformanceStats();
-    const clientStats = this.gameClient.getStats();
+    const clientStats = this.gameClient ? this.gameClient.getStats() : null;
 
     const performanceHTML = `
       <div><strong>Performance</strong></div>
       <div>FPS: ${rendererStats.fps.toFixed(1)}</div>
       <div>Frame Time: ${rendererStats.lastFrameTime.toFixed(1)}ms</div>
       <div>Cells: ${rendererStats.renderStats.cellsRendered}</div>
-      <div>Poll Rate: ${
-        clientStats.session.isPolling ? "Active" : "Inactive"
-      }</div>
-      <div>State Version: ${clientStats.session.lastStateVersion}</div>
+      <div>Cache: ${rendererStats.cacheSize}</div>
+      ${clientStats ? `
+        <div>Poll Rate: ${clientStats.session.isPolling ? "Active" : "Inactive"}</div>
+        <div>State Version: ${clientStats.session.lastStateVersion}</div>
+      ` : ''}
     `;
 
     this.performanceElement.innerHTML = performanceHTML;
@@ -1318,7 +1450,7 @@ class GameDisplay {
   }
 
   /**
-   * Destroys the display and releases all resources
+   * Destroys the display and releases all resources with proper cleanup
    */
   destroy() {
     this.logger.enter("destroy");
@@ -1330,6 +1462,12 @@ class GameDisplay {
     if (this.resizeObserver) {
       this.resizeObserver.disconnect();
       this.resizeObserver = null;
+    }
+
+    // Clear renderer cache and resources
+    if (this.renderer) {
+      this.renderer.clearCache();
+      this.renderer = null;
     }
 
     // Destroy game client
@@ -1349,15 +1487,14 @@ class GameDisplay {
       this.element.parentNode.removeChild(this.element);
     }
 
-    // Clear references
+    // Clear references for garbage collection
     this.element = null;
     this.canvasElement = null;
     this.performanceElement = null;
     this.viewport = null;
-    this.renderer = null;
     this.container = null;
 
-    this.logger.info("destroy", "Game display destroyed");
+    this.logger.info("destroy", "Game display destroyed and resources cleaned up");
   }
 }
 

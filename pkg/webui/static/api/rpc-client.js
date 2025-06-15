@@ -216,15 +216,18 @@ class RPCClient {
           break;
         }
 
-        // Wait before retrying
+        // Exponential backoff with jitter
+        const baseDelay = this.retryDelay * Math.pow(2, attempt);
+        const jitterDelay = baseDelay + Math.random() * 1000;
+
         this.logger.warn(
           "_executeRequest",
-          `Network error on attempt ${attempt + 1}, retrying in ${
-            this.retryDelay
-          }ms`,
+          `Network error on attempt ${attempt + 1}, retrying in ${jitterDelay.toFixed(
+            0
+          )}ms`,
           error
         );
-        await this._delay(this.retryDelay);
+        await this._delay(jitterDelay);
       }
     }
 
@@ -358,6 +361,84 @@ class RPCClient {
       return results.map(r => (r && r.error ? null : r));
     } catch (error) {
       this.logger.error("batch", "Batch execution failed", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Creates a long-polling request for real-time updates with enhanced timeout handling
+   * @param {string} method - RPC method name
+   * @param {Object} params - Method parameters
+   * @param {Object} [options={}] - Polling options
+   * @param {number} [options.timeout=30000] - Long-poll timeout
+   * @param {number} [options.version] - Current state version
+   * @returns {Promise<*>} Poll result
+   */
+  async longPoll(method, params = {}, options = {}) {
+    const longPollOptions = {
+      timeout: options.timeout || 30000,
+      retryOnError: false, // Let caller handle polling retry logic
+      ...options
+    };
+
+    // Add version parameter for efficient polling
+    if (options.version !== undefined) {
+      params.version = options.version;
+    }
+
+    // Add long-poll specific parameters
+    params.longPoll = true;
+    params.pollTimeout = longPollOptions.timeout - 5000; // Server timeout slightly less than client
+
+    this.logger.debug("longPoll", `Starting long-poll for ${method}`, {
+      timeout: longPollOptions.timeout,
+      version: params.version
+    });
+
+    return this.call(method, params, longPollOptions);
+  }
+
+  /**
+   * Performs efficient state polling with change detection
+   * @param {string} method - RPC method name
+   * @param {Object} params - Method parameters including version
+   * @param {Object} [options={}] - Polling options
+   * @returns {Promise<*>} Poll result with change detection
+   */
+  async pollWithChangeDetection(method, params = {}, options = {}) {
+    const startTime = Date.now();
+    
+    try {
+      const result = await this.longPoll(method, params, options);
+      
+      // Check if we got new data or just a timeout
+      const hasChanges = result && (
+        !params.version || 
+        (result.version && result.version > params.version)
+      );
+      
+      this.logger.debug("pollWithChangeDetection", 
+        `Poll completed in ${Date.now() - startTime}ms`, {
+          hasChanges,
+          oldVersion: params.version,
+          newVersion: result?.version
+        });
+      
+      return {
+        ...result,
+        hasChanges,
+        pollTime: Date.now() - startTime
+      };
+    } catch (error) {
+      // Handle timeout as normal for long-polling
+      if (error.message.includes('timeout')) {
+        this.logger.debug("pollWithChangeDetection", "Long-poll timeout (normal)");
+        return {
+          hasChanges: false,
+          pollTime: Date.now() - startTime,
+          timeout: true
+        };
+      }
       throw error;
     }
   }
