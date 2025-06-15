@@ -26,6 +26,7 @@ type WebView struct {
 	updateNotify chan struct{}
 	stateManager *StateManager
 	tileset      *TilesetConfig
+	closed       bool // Track if view has been closed to prevent race conditions
 
 	// ANSI parsing state - simplified with library integration
 	currentFgColor string
@@ -59,6 +60,7 @@ func NewWebView(opts dgclient.ViewOptions) (*WebView, error) {
 		inputChan:    make(chan []byte, 100),
 		updateNotify: make(chan struct{}, 10),
 		stateManager: NewStateManager(),
+		closed:       false, // Initialize closed state
 
 		// Initialize color state
 		currentFgColor: "#FFFFFF",
@@ -116,6 +118,11 @@ func (v *WebView) Render(data []byte) error {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 
+	// Check if view is closed to prevent race condition
+	if v.closed {
+		return fmt.Errorf("cannot render to closed view")
+	}
+
 	// Process the terminal data to update buffer
 	v.processTerminalData(data)
 
@@ -123,7 +130,7 @@ func (v *WebView) Render(data []byte) error {
 	state := v.getCurrentState()
 	v.stateManager.UpdateState(state)
 
-	// Notify polling clients of updates
+	// Notify polling clients of updates - safe channel send
 	select {
 	case v.updateNotify <- struct{}{}:
 	default:
@@ -189,6 +196,15 @@ func (v *WebView) HandleInput() ([]byte, error) {
 // Close cleans up resources
 // Moved from: view.go
 func (v *WebView) Close() error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+
+	// Prevent double close
+	if v.closed {
+		return nil
+	}
+
+	v.closed = true
 	close(v.inputChan)
 	close(v.updateNotify)
 	return nil
@@ -197,6 +213,13 @@ func (v *WebView) Close() error {
 // SendInput queues input from web client
 // Moved from: view.go
 func (v *WebView) SendInput(data []byte) {
+	v.mu.RLock()
+	if v.closed {
+		v.mu.RUnlock()
+		return // Silently ignore input to closed view
+	}
+	v.mu.RUnlock()
+
 	select {
 	case v.inputChan <- data:
 	default:
@@ -286,6 +309,15 @@ func (v *WebView) processTerminalData(data []byte) {
 		b := data[i]
 
 		if v.inEscapeSeq {
+			// Check for buffer overflow protection FIRST before appending
+			if len(v.escapeBuffer) >= 32 {
+				// Log the potential attack attempt for security monitoring
+				fmt.Printf("SECURITY WARNING: Escape sequence buffer overflow attempt detected, resetting\n")
+				// Reset escape sequence state and continue processing
+				v.escapeBuffer = v.escapeBuffer[:0]
+				v.inEscapeSeq = false
+				continue // Don't increment i, reprocess this byte as normal character
+			}
 			v.escapeBuffer = append(v.escapeBuffer, b)
 			if v.processEscapeSequence(b) {
 				v.inEscapeSeq = false
@@ -339,18 +371,8 @@ func (v *WebView) processTerminalData(data []byte) {
 // processEscapeSequence processes individual bytes of escape sequences
 // Moved from: view.go
 func (v *WebView) processEscapeSequence(b byte) bool {
-	// Check for buffer overflow protection FIRST before appending
-	if len(v.escapeBuffer) >= 32 {
-		// Log the potential attack attempt for security monitoring
-		fmt.Printf("SECURITY WARNING: Escape sequence buffer overflow attempt detected, resetting\n")
-		// Reset escape sequence state and return true to exit
-		v.escapeBuffer = v.escapeBuffer[:0]
-		v.inEscapeSeq = false
-		return true
-	}
-
-	// Add the byte to the buffer after safety check
-	v.escapeBuffer = append(v.escapeBuffer, b)
+	// Safety check is now handled in processTerminalData before this function is called
+	// This function assumes the byte has already been added to the buffer safely
 	escSeq := string(v.escapeBuffer)
 
 	// Handle CSI sequences (ESC[...)
