@@ -19,15 +19,25 @@
   const MAX_RETRIES = 3;
 
   /**
-   * Handles successful module loading
+   * Handles successful module loading with cleanup and user feedback
+   * @returns {void} No return value, performs UI updates and logging
+   * @throws {Error} Never throws, handles all errors gracefully
+   * @example
+   * // Internal function called automatically on successful module load
+   * // handleModuleLoadSuccess(); // Updates UI and announces to screen readers
+   * @since 1.0.0
    */
   function handleModuleLoadSuccess() {
-    console.log("[AppInit] Main module loaded successfully");
+    console.debug(`[handleModuleLoadSuccess] - DEBUG: Main module loaded successfully, starting cleanup`);
+    
+    const loadTime = Date.now() - initializationStartTime;
+    console.info(`[handleModuleLoadSuccess] - INFO: Module load completed in ${loadTime}ms`);
 
     // Clear timeout
     if (loadTimeout) {
       clearTimeout(loadTimeout);
       loadTimeout = null;
+      console.debug(`[handleModuleLoadSuccess] - DEBUG: Load timeout cleared`);
     }
 
     // Hide loading screen with fade effect
@@ -38,25 +48,34 @@
       window.DGameLaunchErrorHandler.announceToScreenReader(
         "Game client loaded successfully. Ready to connect."
       );
+      console.debug(`[handleModuleLoadSuccess] - DEBUG: Screen reader announcement sent`);
+    } else {
+      console.warn(`[handleModuleLoadSuccess] - WARN: Error handler not available for screen reader announcement`);
     }
 
-    // Log performance metrics
-    const loadTime = Date.now() - initializationStartTime;
-    console.log(`[AppInit] Initialization completed in ${loadTime}ms`);
+    console.info(`[handleModuleLoadSuccess] - INFO: Initialization completed successfully in ${loadTime}ms`);
   }
 
   /**
-   * Handles module loading failure
-   * @param {Error} error - Loading error
-   * @param {number} [retryCount=0] - Current retry attempt
+   * Handles module loading failure with error reporting and retry logic
+   * @param {Error} error - Error object describing the failure reason
+   * @param {number} [retryCount=0] - Current retry attempt number (0-based)
+   * @returns {void} No return value, displays error or initiates retry
+   * @throws {Error} Never throws, all errors are handled and reported
+   * @example
+   * // Internal function called automatically on module load failure
+   * // handleModuleLoadFailure(new Error('Network timeout'), 1);
+   * @since 1.0.0
    */
   function handleModuleLoadFailure(error, retryCount = 0) {
-    console.error("[AppInit] Failed to load main module:", error);
+    console.debug(`[handleModuleLoadFailure] - DEBUG: Handling module load failure, retry count: ${retryCount}`, error);
+    console.error(`[handleModuleLoadFailure] - ERROR: Module load failed:`, error);
 
     // Clear timeout
     if (loadTimeout) {
       clearTimeout(loadTimeout);
       loadTimeout = null;
+      console.debug(`[handleModuleLoadFailure] - DEBUG: Load timeout cleared`);
     }
 
     // Determine error message based on error type and retry count
@@ -65,34 +84,48 @@
       errorMessage =
         "Failed to load the game client after multiple attempts. " +
         "This may be due to a persistent network issue or browser compatibility problem.";
+      console.error(`[handleModuleLoadFailure] - ERROR: Max retries exceeded (${MAX_RETRIES}), showing final error`);
     } else if (error && error.message && error.message.includes("import")) {
       errorMessage =
         "Failed to load the game client module. " +
         "This may be due to a browser compatibility issue or network problem.";
+      console.warn(`[handleModuleLoadFailure] - WARN: Import-related error detected`);
     } else {
       errorMessage =
         "Unable to initialize the game client. " +
         "Please check your internet connection and try refreshing the page.";
+      console.warn(`[handleModuleLoadFailure] - WARN: General initialization error`);
     }
 
     // Show error using error handler
     if (window.DGameLaunchErrorHandler) {
       window.DGameLaunchErrorHandler.showError(errorMessage, error);
+      console.info(`[handleModuleLoadFailure] - INFO: Error displayed to user via error handler`);
     } else {
       // Fallback if error handler isn't available
       console.error(
-        "[AppInit] Error handler not available, cannot display user-friendly error"
+        `[handleModuleLoadFailure] - ERROR: Error handler not available, using alert fallback`
       );
       alert(`Error: ${errorMessage}`);
     }
   }
 
   /**
-   * Hides the loading screen with smooth transition
+   * Hides the loading screen with smooth transition animation
+   * @returns {void} No return value, performs DOM manipulation for UI transition
+   * @throws {Error} Never throws, handles missing elements gracefully
+   * @example
+   * // Internal function called automatically after successful module load
+   * // hideLoadingScreen(); // Fades out and removes loading screen element
+   * @since 1.0.0
    */
   function hideLoadingScreen() {
+    console.debug(`[hideLoadingScreen] - DEBUG: Attempting to hide loading screen`);
+    
     const loadingScreen = document.getElementById("initial-loading");
     if (loadingScreen && !window.DGameLaunchErrorHandler?.isErrorDisplayed()) {
+      console.debug(`[hideLoadingScreen] - DEBUG: Loading screen element found, starting fade transition`);
+      
       // Fade out loading screen
       loadingScreen.style.transition = "opacity 0.5s ease";
       loadingScreen.style.opacity = "0";
@@ -100,8 +133,15 @@
       setTimeout(() => {
         if (loadingScreen.parentNode) {
           loadingScreen.parentNode.removeChild(loadingScreen);
+          console.info(`[hideLoadingScreen] - INFO: Loading screen successfully removed from DOM`);
+        } else {
+          console.warn(`[hideLoadingScreen] - WARN: Loading screen element no longer has parent node`);
         }
       }, 500);
+    } else if (!loadingScreen) {
+      console.warn(`[hideLoadingScreen] - WARN: Loading screen element not found in DOM`);
+    } else {
+      console.warn(`[hideLoadingScreen] - WARN: Error displayed, skipping loading screen removal`);
     }
   }
 

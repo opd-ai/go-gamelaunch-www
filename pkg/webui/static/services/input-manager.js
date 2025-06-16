@@ -93,25 +93,52 @@ const TerminalSequences = {
 
 /**
  * @class InputEvent
- * @description Represents a single input event with normalized properties for game processing
+ * @description Represents a single input event with normalized properties for game processing and terminal transmission
+ * @since 1.0.0
  */
 class InputEvent {
   /**
-   * Creates a new InputEvent instance
-   * @param {string} type - Event type (from InputEventType enum)
-   * @param {Object} data - Event data
-   * @param {string} [data.key] - Key identifier for keyboard events
-   * @param {string} [data.code] - Physical key code
-   * @param {boolean} [data.ctrlKey=false] - Ctrl modifier state
-   * @param {boolean} [data.altKey=false] - Alt modifier state
-   * @param {boolean} [data.shiftKey=false] - Shift modifier state
-   * @param {boolean} [data.metaKey=false] - Meta/Cmd modifier state
-   * @param {number} [data.x] - Mouse X coordinate
-   * @param {number} [data.y] - Mouse Y coordinate
-   * @param {number} [data.button] - Mouse button pressed
-   * @param {Event} [originalEvent] - Original DOM event for reference
+   * Creates a new InputEvent instance with normalized event data for consistent processing
+   * @constructor
+   * @memberof InputEvent
+   * @param {string} type - Event type from InputEventType enum for event classification
+   * @param {Object} data - Event data object containing type-specific properties
+   * @param {string} [data.key] - Key identifier for keyboard events (e.g., 'a', 'Enter', 'ArrowUp')
+   * @param {string} [data.code] - Physical key code for hardware-independent identification
+   * @param {boolean} [data.ctrlKey=false] - Ctrl modifier key state for keyboard shortcuts
+   * @param {boolean} [data.altKey=false] - Alt modifier key state for extended key combinations
+   * @param {boolean} [data.shiftKey=false] - Shift modifier key state for case sensitivity
+   * @param {boolean} [data.metaKey=false] - Meta/Cmd modifier key state for system shortcuts
+   * @param {number} [data.x] - Mouse X coordinate relative to target element for positioning
+   * @param {number} [data.y] - Mouse Y coordinate relative to target element for positioning
+   * @param {number} [data.button] - Mouse button identifier (0=left, 1=middle, 2=right)
+   * @param {Event} [originalEvent=null] - Original DOM event object for reference and debugging
+   * @returns {InputEvent} New InputEvent instance with normalized properties and metadata
+   * @throws {TypeError} When type parameter is not a string or data is not an object
+   * @example
+   * // Create a keyboard event for the 'A' key with Ctrl modifier
+   * const keyEvent = new InputEvent('keydown', {
+   *   key: 'a', ctrlKey: true, shiftKey: false
+   * });
+   * 
+   * // Create a mouse click event at coordinates (100, 50)
+   * const mouseEvent = new InputEvent('mouseclick', {
+   *   x: 100, y: 50, button: 0
+   * });
+   * @since 1.0.0
    */
   constructor(type, data, originalEvent = null) {
+    console.debug(`[InputEvent.constructor] - DEBUG: Creating InputEvent with type '${type}' and data`, data);
+    
+    if (typeof type !== 'string') {
+      console.error(`[InputEvent.constructor] - ERROR: Invalid type parameter, expected string but got ${typeof type}`);
+      throw new TypeError('Event type must be a string');
+    }
+    
+    if (!data || typeof data !== 'object') {
+      console.error(`[InputEvent.constructor] - ERROR: Invalid data parameter, expected object but got ${typeof data}`);
+      throw new TypeError('Event data must be an object');
+    }
     this.type = type;
     this.timestamp = Date.now();
     this.id = `${type}_${this.timestamp}_${Math.random()
