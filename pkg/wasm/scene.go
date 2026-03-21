@@ -1,3 +1,5 @@
+//go:build js
+
 // Package wasm provides Scene interface for game state management.
 package wasm
 

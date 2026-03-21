@@ -33,12 +33,12 @@ const ConnectionState = {
  * @description RPC method names for server communication
  */
 const RPCMethod = {
-  CONNECT: "GameClient.Connect",
-  DISCONNECT: "GameClient.Disconnect",
-  SEND_INPUT: "GameClient.SendInput",
-  GET_STATE: "GameClient.GetState",
-  RESIZE: "GameClient.Resize",
-  PING: "GameClient.Ping"
+  CONNECT: "session.info",
+  DISCONNECT: "session.info",
+  SEND_INPUT: "game.sendInput",
+  GET_STATE: "game.getState",
+  RESIZE: "game.resize",
+  PING: "session.info"
 };
 
 /**

@@ -1,3 +1,5 @@
+//go:build js
+
 // Package wasm provides input handling for keyboard and mouse events.
 package wasm
 

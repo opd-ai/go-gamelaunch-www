@@ -123,37 +123,41 @@ func DefaultTilesetConfig() *TilesetConfig {
 // validate checks if the tileset configuration is valid
 // Moved from: tileset.go
 func (tc *TilesetConfig) validate() error {
+	if err := tc.validateDimensions(); err != nil {
+		return err
+	}
+	if err := tc.validateMappings(); err != nil {
+		return err
+	}
+	return tc.validateSpecialTiles()
+}
+
+// validateDimensions checks basic metadata and tile size fields.
+func (tc *TilesetConfig) validateDimensions() error {
 	if tc.Name == "" {
 		return fmt.Errorf("tileset name is required")
 	}
-
 	if tc.Version == "" {
 		return fmt.Errorf("tileset version is required")
 	}
-
 	if tc.TileWidth <= 0 || tc.TileHeight <= 0 {
 		return fmt.Errorf("tile dimensions must be positive (got %dx%d)", tc.TileWidth, tc.TileHeight)
 	}
-
 	if tc.SourceImage == "" {
 		return fmt.Errorf("source image is required")
 	}
-
-	// Check if image file has a supported extension
 	ext := strings.ToLower(filepath.Ext(tc.SourceImage))
 	supportedExts := []string{".png", ".jpg", ".jpeg", ".gif"}
-	supported := false
 	for _, supportedExt := range supportedExts {
 		if ext == supportedExt {
-			supported = true
-			break
+			return nil
 		}
 	}
-	if !supported {
-		return fmt.Errorf("unsupported image format '%s', supported formats: %v", ext, supportedExts)
-	}
+	return fmt.Errorf("unsupported image format '%s', supported formats: %v", ext, supportedExts)
+}
 
-	// Validate mappings
+// validateMappings checks the character-to-tile mappings for duplicates and valid values.
+func (tc *TilesetConfig) validateMappings() error {
 	charSet := make(map[string]bool)
 	coordSet := make(map[string]bool)
 
@@ -161,7 +165,6 @@ func (tc *TilesetConfig) validate() error {
 		if mapping.Char == "" {
 			return fmt.Errorf("mapping %d: character is required", i)
 		}
-
 		if charSet[mapping.Char] {
 			return fmt.Errorf("mapping %d: duplicate character '%s'", i, mapping.Char)
 		}
@@ -170,15 +173,12 @@ func (tc *TilesetConfig) validate() error {
 		if mapping.X < 0 || mapping.Y < 0 {
 			return fmt.Errorf("mapping %d: tile coordinates must be non-negative (got %d, %d)", i, mapping.X, mapping.Y)
 		}
-
-		// Check for duplicate coordinates
 		coordKey := fmt.Sprintf("%d,%d", mapping.X, mapping.Y)
 		if coordSet[coordKey] {
 			return fmt.Errorf("mapping %d: duplicate tile coordinates (%d, %d)", i, mapping.X, mapping.Y)
 		}
 		coordSet[coordKey] = true
 
-		// Validate color formats if provided
 		if mapping.FgColor != "" && !isValidColor(mapping.FgColor) {
 			return fmt.Errorf("mapping %d: invalid foreground color format '%s'", i, mapping.FgColor)
 		}
@@ -186,14 +186,16 @@ func (tc *TilesetConfig) validate() error {
 			return fmt.Errorf("mapping %d: invalid background color format '%s'", i, mapping.BgColor)
 		}
 	}
+	return nil
+}
 
-	// Validate special tiles
+// validateSpecialTiles checks special tile definitions for duplicates and valid references.
+func (tc *TilesetConfig) validateSpecialTiles() error {
 	specialIDSet := make(map[string]bool)
 	for i, special := range tc.SpecialTiles {
 		if special.ID == "" {
 			return fmt.Errorf("special tile %d: ID is required", i)
 		}
-
 		if specialIDSet[special.ID] {
 			return fmt.Errorf("special tile %d: duplicate ID '%s'", i, special.ID)
 		}
@@ -202,14 +204,12 @@ func (tc *TilesetConfig) validate() error {
 		if len(special.Tiles) == 0 {
 			return fmt.Errorf("special tile %d: at least one tile reference is required", i)
 		}
-
 		for j, tile := range special.Tiles {
 			if tile.X < 0 || tile.Y < 0 {
 				return fmt.Errorf("special tile %d, tile %d: coordinates must be non-negative", i, j)
 			}
 		}
 	}
-
 	return nil
 }
 
@@ -315,6 +315,11 @@ func (tc *TilesetConfig) GetMapping(char rune) *TileMapping {
 // Moved from: tileset.go
 func (tc *TilesetConfig) GetImageData() image.Image {
 	return tc.imageData
+}
+
+// SetImageData replaces the tileset's image data with the provided image.
+func (tc *TilesetConfig) SetImageData(img image.Image) {
+	tc.imageData = img
 }
 
 // GetTileCount returns the number of tiles in the tileset

@@ -1,3 +1,5 @@
+//go:build js
+
 // Package wasm provides an Ebitengine-based game interface for browser rendering.
 // This package implements the ebiten.Game interface and provides real-time
 // terminal-to-tile rendering for roguelike games in WebAssembly.

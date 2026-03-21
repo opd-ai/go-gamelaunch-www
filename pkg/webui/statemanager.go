@@ -141,19 +141,28 @@ func (sm *StateManager) notifyWaiters(diff *StateDiff) {
 	defer sm.waitersMu.Unlock()
 
 	for key, waiterCh := range sm.waiters {
-		// Parse version from unique key for comparison
-		parts := strings.Split(key, "-")
-		if len(parts) >= 1 {
-			if version, err := strconv.ParseUint(parts[0], 10, 64); err == nil {
-				if version < diff.Version {
-					select {
-					case waiterCh <- diff:
-					default:
-						// Channel full, skip
-					}
-				}
-			}
+		if version, ok := parseWaiterVersion(key); ok && version < diff.Version {
+			sendToWaiter(waiterCh, diff)
 		}
+	}
+}
+
+// parseWaiterVersion extracts the version number from a waiter key.
+func parseWaiterVersion(key string) (uint64, bool) {
+	parts := strings.Split(key, "-")
+	if len(parts) < 1 {
+		return 0, false
+	}
+	version, err := strconv.ParseUint(parts[0], 10, 64)
+	return version, err == nil
+}
+
+// sendToWaiter delivers a diff to a waiter channel without blocking.
+func sendToWaiter(ch chan *StateDiff, diff *StateDiff) {
+	select {
+	case ch <- diff:
+	default:
+		// Channel full, skip
 	}
 }
 
@@ -186,49 +195,35 @@ func (sm *StateManager) generateDiff(oldState, newState *GameState) *StateDiff {
 		Changes:   make([]CellDiff, 0),
 	}
 
-	// Compare buffers
-	maxY := newState.Height
-	if oldState.Height < maxY {
-		maxY = oldState.Height
-	}
-
+	// Compare cells in the overlapping region.
+	maxY := min(oldState.Height, newState.Height)
 	for y := 0; y < maxY; y++ {
-		maxX := newState.Width
-		if oldState.Width < maxX {
-			maxX = oldState.Width
-		}
-
+		maxX := min(oldState.Width, newState.Width)
 		for x := 0; x < maxX; x++ {
-			oldCell := oldState.Buffer[y][x]
-			newCell := newState.Buffer[y][x]
-
-			if sm.cellsDiffer(oldCell, newCell) {
-				diff.Changes = append(diff.Changes, CellDiff{
-					X:    x,
-					Y:    y,
-					Cell: newCell,
-				})
+			if sm.cellsDiffer(oldState.Buffer[y][x], newState.Buffer[y][x]) {
+				diff.Changes = append(diff.Changes, CellDiff{X: x, Y: y, Cell: newState.Buffer[y][x]})
 			}
 		}
 	}
 
-	// Handle size changes
-	if newState.Height > oldState.Height || newState.Width > oldState.Width {
-		// Add new cells
-		for y := 0; y < newState.Height; y++ {
-			for x := 0; x < newState.Width; x++ {
-				if y >= oldState.Height || x >= oldState.Width {
-					diff.Changes = append(diff.Changes, CellDiff{
-						X:    x,
-						Y:    y,
-						Cell: newState.Buffer[y][x],
-					})
-				}
-			}
-		}
-	}
+	// Append cells from any expanded region.
+	appendExpandedCells(diff, oldState, newState)
 
 	return diff
+}
+
+// appendExpandedCells adds all cells from rows/columns that exist only in newState.
+func appendExpandedCells(diff *StateDiff, oldState, newState *GameState) {
+	if newState.Height <= oldState.Height && newState.Width <= oldState.Width {
+		return
+	}
+	for y := 0; y < newState.Height; y++ {
+		for x := 0; x < newState.Width; x++ {
+			if y >= oldState.Height || x >= oldState.Width {
+				diff.Changes = append(diff.Changes, CellDiff{X: x, Y: y, Cell: newState.Buffer[y][x]})
+			}
+		}
+	}
 }
 
 // generateDiffFromVersion generates diff from a specific version to current

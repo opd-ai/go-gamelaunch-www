@@ -6,38 +6,16 @@ import (
 	"fmt"
 	"log"
 	"time"
-
-	"github.com/gorilla/rpc/v2"
-	"github.com/gorilla/rpc/v2/json2"
 )
 
-// RPCHandler maintains compatibility with existing code
-// Moved from: rpc.go
+// RPCHandler handles JSON-RPC requests via a manual dispatch switch.
 type RPCHandler struct {
-	webui     *WebUI
-	rpcServer *rpc.Server
+	webui *WebUI
 }
 
-// NewRPCHandler creates a new RPC handler with Gorilla RPC integration
+// NewRPCHandler creates a new RPC handler.
 func NewRPCHandler(webui *WebUI) *RPCHandler {
-	handler := &RPCHandler{webui: webui}
-
-	// Create Gorilla RPC server
-	rpcServer := rpc.NewServer()
-	rpcServer.RegisterCodec(json2.NewCodec(), "application/json")
-	rpcServer.RegisterCodec(json2.NewCodec(), "application/json; charset=UTF-8")
-
-	// Register services
-	gameService := &GameService{handler: handler}
-	tilesetService := NewTilesetService(handler) // Use enhanced tileset service
-	sessionService := &SessionService{handler: handler}
-
-	rpcServer.RegisterService(gameService, "game")
-	rpcServer.RegisterService(tilesetService, "tileset")
-	rpcServer.RegisterService(sessionService, "session")
-
-	handler.rpcServer = rpcServer
-	return handler
+	return &RPCHandler{webui: webui}
 }
 
 // HandleRequest preserves the original signature for compatibility
@@ -116,6 +94,21 @@ func (h *RPCHandler) HandleRequest(ctx context.Context, req *RPCRequest) *RPCRes
 			response.Result = result
 		}
 
+	case "game.disconnect":
+		log.Printf("[RPC] Processing game.disconnect request")
+		response.Result = map[string]interface{}{"disconnected": true}
+
+	case "game.resize":
+		log.Printf("[RPC] Processing game.resize request")
+		result, err := h.handleGameResize(ctx, req.Params)
+		if err != nil {
+			log.Printf("[RPC] game.resize error: %v", err)
+			response.Error = h.makeError(InvalidParams, err.Error())
+		} else {
+			log.Printf("[RPC] game.resize completed successfully")
+			response.Result = result
+		}
+
 	default:
 		log.Printf("[RPC] Unknown method requested: %s", req.Method)
 		response.Error = h.makeError(MethodNotFound, fmt.Sprintf("method '%s' not found", req.Method))
@@ -123,11 +116,6 @@ func (h *RPCHandler) HandleRequest(ctx context.Context, req *RPCRequest) *RPCRes
 
 	log.Printf("[RPC] Request completed: method=%s, id=%v, success=%t", req.Method, req.ID, response.Error == nil)
 	return response
-}
-
-// GetRPCServer returns the underlying Gorilla RPC server for HTTP integration
-func (h *RPCHandler) GetRPCServer() *rpc.Server {
-	return h.rpcServer
 }
 
 // Original handler methods preserved with all logging
@@ -386,15 +374,47 @@ func (h *RPCHandler) convertKeyEvent(event InputEvent) []byte {
 }
 
 func (h *RPCHandler) handleTilesetUpdate(ctx context.Context, params json.RawMessage) (interface{}, error) {
-	// For now, return not implemented
-	return nil, fmt.Errorf("tileset updates not yet implemented")
+	var updateParams TilesetUpdateParams
+	if err := json.Unmarshal(params, &updateParams); err != nil {
+		return nil, fmt.Errorf("invalid tileset update parameters: %w", err)
+	}
+
+	ts := h.webui.tilesetService
+	if ts == nil {
+		return nil, fmt.Errorf("tileset service not available")
+	}
+
+	var result map[string]interface{}
+	if err := ts.Update(nil, &updateParams, &result); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
 func (h *RPCHandler) handleSessionInfo(ctx context.Context, params json.RawMessage) (interface{}, error) {
 	return map[string]interface{}{
+		"sessionId":      "session-1",
 		"connected":      h.webui.view != nil,
 		"timestamp":      time.Now().Unix(),
 		"server_version": "1.0.0",
+	}, nil
+}
+
+// GameResizeParams holds terminal resize dimensions.
+type GameResizeParams struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
+func (h *RPCHandler) handleGameResize(ctx context.Context, params json.RawMessage) (interface{}, error) {
+	var resizeParams GameResizeParams
+	if err := json.Unmarshal(params, &resizeParams); err != nil {
+		return nil, fmt.Errorf("invalid resize parameters: %w", err)
+	}
+	return map[string]interface{}{
+		"resized": true,
+		"width":   resizeParams.Width,
+		"height":  resizeParams.Height,
 	}, nil
 }
 

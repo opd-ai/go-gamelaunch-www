@@ -384,8 +384,7 @@ func (ts *TilesetService) processImage(tileset *TilesetConfig, options Processin
 	}
 
 	// Update tileset with processed image
-	// Note: This is a simplified approach - in reality, we'd need to properly update the TilesetConfig
-	// For now, we'll store it in a way that can be retrieved
+	tileset.SetImageData(processedImg)
 
 	return nil
 }

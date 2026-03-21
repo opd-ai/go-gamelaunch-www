@@ -1,0 +1,11 @@
+?   	github.com/opd-ai/go-gamelaunch-www/cmd/dgconnect-www	[no test files]
+ok  	github.com/opd-ai/go-gamelaunch-www/pkg/transport	1.015s
+glfw: X11: The DISPLAY environment variable is missing: a platform-specific error occurred
+panic: glfw: The GLFW library is not initialized: the GLFW library is not initialized
+
+goroutine 1 [running]:
+github.com/hajimehoshi/ebiten/v2/internal/ui.init.0()
+	/home/user/go/pkg/mod/github.com/hajimehoshi/ebiten/v2@v2.9.9/internal/ui/ui.go:101 +0x9b
+FAIL	github.com/opd-ai/go-gamelaunch-www/pkg/wasm	0.040s
+ok  	github.com/opd-ai/go-gamelaunch-www/pkg/webui	2.726s
+FAIL

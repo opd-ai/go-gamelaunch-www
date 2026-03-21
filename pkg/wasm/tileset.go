@@ -1,3 +1,5 @@
+//go:build js
+
 // Package wasm provides tileset loading and management for Ebitengine.
 package wasm
 

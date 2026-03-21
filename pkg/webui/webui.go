@@ -42,11 +42,12 @@ type WebUIOptions struct {
 // WebUI provides a web-based interface for dgclient
 // Moved from: webui.go
 type WebUI struct {
-	view       *WebView
-	tileset    *TilesetConfig
-	rpcHandler *RPCHandler
-	mux        *http.ServeMux
-	options    WebUIOptions
+	view           *WebView
+	tileset        *TilesetConfig
+	rpcHandler     *RPCHandler
+	tilesetService *TilesetService
+	mux            *http.ServeMux
+	options        WebUIOptions
 }
 
 //go:embed static/index.html
@@ -94,6 +95,9 @@ func NewWebUI(opts WebUIOptions) (*WebUI, error) {
 
 	// Create RPC handler
 	webui.rpcHandler = NewRPCHandler(webui)
+
+	// Create tileset service for hot-reload support
+	webui.tilesetService = NewTilesetService(webui.rpcHandler)
 
 	// Set up routes
 	webui.setupRoutes()
@@ -425,11 +429,9 @@ func (w *WebUI) StartWithContext(ctx context.Context, addr string) error {
 	}
 }
 
-// getTilesetService extracts the tileset service from the RPC handler
+// getTilesetService returns the tileset service for hot-reload monitoring.
 func (w *WebUI) getTilesetService() *TilesetService {
-	// This is a helper method to access the tileset service for hot-reload
-	// In a production system, you might want a more direct reference
-	return nil // Simplified for now - the service will be available via RPC
+	return w.tilesetService
 }
 
 // CreateWebView creates a new WebView that implements dgclient.View

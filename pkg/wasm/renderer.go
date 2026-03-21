@@ -1,3 +1,5 @@
+//go:build js
+
 // Package wasm provides tile rendering for the game interface.
 package wasm
 

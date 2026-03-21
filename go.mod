@@ -4,7 +4,6 @@ go 1.24.0
 
 require (
 	github.com/fatih/color v1.18.0
-	github.com/gorilla/rpc v1.2.1
 	github.com/hajimehoshi/ebiten/v2 v2.9.9
 	github.com/opd-ai/go-gamelaunch-client v0.0.0-20250601154701-8023560de4fc
 	github.com/spf13/cobra v1.9.1
@@ -12,6 +11,7 @@ require (
 	golang.org/x/crypto v0.38.0
 	golang.org/x/term v0.32.0
 	gopkg.in/yaml.v3 v3.0.1
+	nhooyr.io/websocket v1.8.17
 )
 
 require (
@@ -36,5 +36,4 @@ require (
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	golang.org/x/text v0.29.0 // indirect
-	nhooyr.io/websocket v1.8.17 // indirect
 )
