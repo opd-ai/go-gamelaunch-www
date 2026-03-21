@@ -44,7 +44,7 @@
 
 ## Implementation Steps
 
-### Step 1: Fix Critical Color Processing Bugs
+### ~~Step 1: Fix Critical Color Processing Bugs~~ ✅ COMPLETED
 - **Deliverable**: Refactored `pkg/webui/colorconverter.go` with correct 256-color and RGB handling
 - **Dependencies**: None
 - **Goal Impact**: Prerequisite for accurate tileset rendering in new WASM client
@@ -55,7 +55,7 @@
   go-stats-generator analyze ./pkg/webui --skip-tests --format json 2>/dev/null | jq '[.functions[] | select(.name == "colorToHex") | .complexity.overall]'
   ```
 
-### Step 2: Consolidate Duplicated State Management Code
+### ~~Step 2: Consolidate Duplicated State Management Code~~ ✅ COMPLETED
 - **Deliverable**: Extract shared logic from `pkg/webui/statemanager.go` lines 83-106 and 143-165 into a helper function
 - **Dependencies**: None
 - **Goal Impact**: Cleaner codebase for WASM migration; reduced maintenance burden
@@ -66,7 +66,7 @@
   go-stats-generator analyze ./pkg/webui --skip-tests --format json 2>/dev/null | jq '.duplication.duplication_ratio'
   ```
 
-### Step 3: Create Ebitengine Game Interface
+### ~~Step 3: Create Ebitengine Game Interface~~ ✅ COMPLETED
 - **Deliverable**: New package `pkg/wasm/` with `ebiten.Game` implementation
   - `pkg/wasm/game.go` - Main game loop implementing `Update()`, `Draw()`, `Layout()`
   - `pkg/wasm/scene.go` - Scene interface and state machine
@@ -80,7 +80,7 @@
   test -f /tmp/test.wasm && echo "WASM build succeeded"
   ```
 
-### Step 4: Implement Tileset Renderer in Ebitengine
+### ~~Step 4: Implement Tileset Renderer in Ebitengine~~ ✅ COMPLETED
 - **Deliverable**: 
   - `pkg/wasm/tileset.go` - Load and render tilesets using `ebiten.Image`
   - `pkg/wasm/renderer.go` - Terminal-to-tile rendering logic
@@ -93,7 +93,7 @@
   go test ./pkg/wasm -run Renderer -v
   ```
 
-### Step 5: Implement WebSocket Transport
+### ~~Step 5: Implement WebSocket Transport~~ ✅ COMPLETED
 - **Deliverable**: 
   - `pkg/transport/websocket.go` - Server-side WebSocket handler replacing JSON-RPC
   - `pkg/wasm/transport.go` - WASM client WebSocket connection via `syscall/js`
@@ -105,7 +105,7 @@
   go test ./pkg/transport -run WebSocket -v
   ```
 
-### Step 6: Integrate Terminal Data Processing
+### ~~Step 6: Integrate Terminal Data Processing~~ ✅ COMPLETED
 - **Deliverable**: Port terminal processing logic to WASM-compatible format
   - Refactor `processTerminalData` (complexity 17.6) for use in WASM client
   - Move color conversion to WASM client side
@@ -117,7 +117,7 @@
   go-stats-generator analyze ./pkg/wasm --skip-tests --format json 2>/dev/null | jq '[.functions[] | select(.name | contains("Terminal")) | {name: .name, complexity: .complexity.overall}]'
   ```
 
-### Step 7: Create Minimal Static Host
+### ~~Step 7: Create Minimal Static Host~~ ✅ COMPLETED
 - **Deliverable**: 
   - `static/index.html` - Minimal HTML to load WASM
   - `static/wasm_exec.js` - Go WASM runtime (from `$(go env GOROOT)/lib/wasm/`)
@@ -130,7 +130,7 @@
   curl -s http://localhost:8080/ | grep -q "wasm_exec.js" && echo "Static host serves WASM"
   ```
 
-### Step 8: Deprecate Legacy Web UI
+### ~~Step 8: Deprecate Legacy Web UI~~ ✅ COMPLETED
 - **Deliverable**: 
   - Add deprecation notices to `pkg/webui/rpc.go`, embedded HTML/JS/CSS
   - Update README.md with new WASM deployment instructions

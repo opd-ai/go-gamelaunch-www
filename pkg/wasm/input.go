@@ -10,6 +10,53 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 )
 
+// specialKeyMappings maps Ebitengine special keys to their terminal string representations.
+var specialKeyMappings = map[ebiten.Key]string{
+	// Special keys
+	ebiten.KeySpace:     " ",
+	ebiten.KeyEnter:     "\r",
+	ebiten.KeyBackspace: "\x7f",
+	ebiten.KeyEscape:    "\x1b",
+	ebiten.KeyTab:       "\t",
+	// Arrow keys (ANSI escape sequences)
+	ebiten.KeyArrowUp:    "\x1b[A",
+	ebiten.KeyArrowDown:  "\x1b[B",
+	ebiten.KeyArrowRight: "\x1b[C",
+	ebiten.KeyArrowLeft:  "\x1b[D",
+	// Function keys
+	ebiten.KeyF1:  "\x1bOP",
+	ebiten.KeyF2:  "\x1bOQ",
+	ebiten.KeyF3:  "\x1bOR",
+	ebiten.KeyF4:  "\x1bOS",
+	ebiten.KeyF5:  "\x1b[15~",
+	ebiten.KeyF6:  "\x1b[17~",
+	ebiten.KeyF7:  "\x1b[18~",
+	ebiten.KeyF8:  "\x1b[19~",
+	ebiten.KeyF9:  "\x1b[20~",
+	ebiten.KeyF10: "\x1b[21~",
+	ebiten.KeyF11: "\x1b[23~",
+	ebiten.KeyF12: "\x1b[24~",
+	// Navigation keys
+	ebiten.KeyHome:     "\x1b[H",
+	ebiten.KeyEnd:      "\x1b[F",
+	ebiten.KeyPageUp:   "\x1b[5~",
+	ebiten.KeyPageDown: "\x1b[6~",
+	ebiten.KeyInsert:   "\x1b[2~",
+	ebiten.KeyDelete:   "\x1b[3~",
+	// Punctuation
+	ebiten.KeyPeriod:       ".",
+	ebiten.KeyComma:        ",",
+	ebiten.KeySemicolon:    ";",
+	ebiten.KeySlash:        "/",
+	ebiten.KeyBackslash:    "\\",
+	ebiten.KeyMinus:        "-",
+	ebiten.KeyEqual:        "=",
+	ebiten.KeyBracketLeft:  "[",
+	ebiten.KeyBracketRight: "]",
+	ebiten.KeyQuote:        "'",
+	ebiten.KeyBackquote:    "`",
+}
+
 // InputHandler manages keyboard and mouse input
 type InputHandler struct {
 	mu          sync.Mutex
@@ -29,63 +76,15 @@ func NewInputHandler() *InputHandler {
 
 // initKeyMap initializes the key to character mapping
 func (ih *InputHandler) initKeyMap() {
-	// Letters
 	for i := ebiten.KeyA; i <= ebiten.KeyZ; i++ {
 		ih.keyMap[i] = string(rune('a' + (i - ebiten.KeyA)))
 	}
-
-	// Numbers
 	for i := ebiten.Key0; i <= ebiten.Key9; i++ {
 		ih.keyMap[i] = string(rune('0' + (i - ebiten.Key0)))
 	}
-
-	// Special keys
-	ih.keyMap[ebiten.KeySpace] = " "
-	ih.keyMap[ebiten.KeyEnter] = "\r"
-	ih.keyMap[ebiten.KeyBackspace] = "\x7f"
-	ih.keyMap[ebiten.KeyEscape] = "\x1b"
-	ih.keyMap[ebiten.KeyTab] = "\t"
-
-	// Arrow keys (ANSI escape sequences)
-	ih.keyMap[ebiten.KeyArrowUp] = "\x1b[A"
-	ih.keyMap[ebiten.KeyArrowDown] = "\x1b[B"
-	ih.keyMap[ebiten.KeyArrowRight] = "\x1b[C"
-	ih.keyMap[ebiten.KeyArrowLeft] = "\x1b[D"
-
-	// Function keys
-	ih.keyMap[ebiten.KeyF1] = "\x1bOP"
-	ih.keyMap[ebiten.KeyF2] = "\x1bOQ"
-	ih.keyMap[ebiten.KeyF3] = "\x1bOR"
-	ih.keyMap[ebiten.KeyF4] = "\x1bOS"
-	ih.keyMap[ebiten.KeyF5] = "\x1b[15~"
-	ih.keyMap[ebiten.KeyF6] = "\x1b[17~"
-	ih.keyMap[ebiten.KeyF7] = "\x1b[18~"
-	ih.keyMap[ebiten.KeyF8] = "\x1b[19~"
-	ih.keyMap[ebiten.KeyF9] = "\x1b[20~"
-	ih.keyMap[ebiten.KeyF10] = "\x1b[21~"
-	ih.keyMap[ebiten.KeyF11] = "\x1b[23~"
-	ih.keyMap[ebiten.KeyF12] = "\x1b[24~"
-
-	// Navigation keys
-	ih.keyMap[ebiten.KeyHome] = "\x1b[H"
-	ih.keyMap[ebiten.KeyEnd] = "\x1b[F"
-	ih.keyMap[ebiten.KeyPageUp] = "\x1b[5~"
-	ih.keyMap[ebiten.KeyPageDown] = "\x1b[6~"
-	ih.keyMap[ebiten.KeyInsert] = "\x1b[2~"
-	ih.keyMap[ebiten.KeyDelete] = "\x1b[3~"
-
-	// Punctuation
-	ih.keyMap[ebiten.KeyPeriod] = "."
-	ih.keyMap[ebiten.KeyComma] = ","
-	ih.keyMap[ebiten.KeySemicolon] = ";"
-	ih.keyMap[ebiten.KeySlash] = "/"
-	ih.keyMap[ebiten.KeyBackslash] = "\\"
-	ih.keyMap[ebiten.KeyMinus] = "-"
-	ih.keyMap[ebiten.KeyEqual] = "="
-	ih.keyMap[ebiten.KeyBracketLeft] = "["
-	ih.keyMap[ebiten.KeyBracketRight] = "]"
-	ih.keyMap[ebiten.KeyQuote] = "'"
-	ih.keyMap[ebiten.KeyBackquote] = "`"
+	for k, v := range specialKeyMappings {
+		ih.keyMap[k] = v
+	}
 }
 
 // mapKey resolves a key to its terminal string using the given mapping.
