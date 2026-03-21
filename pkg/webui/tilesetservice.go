@@ -44,8 +44,8 @@ func clampInt(v int) int {
 
 // TilesetService provides advanced tileset management with runtime processing
 type TilesetService struct {
-	handler *RPCHandler
-	mu      sync.RWMutex
+	webui *WebUI
+	mu    sync.RWMutex
 
 	// Runtime cache for processed images
 	imageCache map[string]*ProcessedImage
@@ -113,9 +113,9 @@ type TilesetInfo struct {
 }
 
 // NewTilesetService creates a new advanced tileset service
-func NewTilesetService(handler *RPCHandler) *TilesetService {
+func NewTilesetService(webui *WebUI) *TilesetService {
 	return &TilesetService{
-		handler:                 handler,
+		webui:                   webui,
 		imageCache:              make(map[string]*ProcessedImage),
 		watchedPaths:            make(map[string]*time.Time),
 		enableImageOptimization: true,
@@ -131,7 +131,7 @@ func (ts *TilesetService) Fetch(r *http.Request, params *struct{}, result *map[s
 
 	log.Printf("[TilesetService] Fetch: Enhanced tileset fetch requested")
 
-	tileset := ts.handler.webui.GetTileset()
+	tileset := ts.webui.GetTileset()
 	if tileset == nil {
 		log.Printf("[TilesetService] Fetch: No tileset available")
 		*result = map[string]interface{}{
@@ -207,7 +207,7 @@ func (ts *TilesetService) Update(r *http.Request, params *TilesetUpdateParams, r
 	}
 
 	// Update the WebUI tileset
-	if err := ts.handler.webui.UpdateTileset(tileset); err != nil {
+	if err := ts.webui.UpdateTileset(tileset); err != nil {
 		log.Printf("[TilesetService] Update: Failed to update WebUI tileset: %v", err)
 		return fmt.Errorf("failed to update tileset: %w", err)
 	}
@@ -251,7 +251,7 @@ func (ts *TilesetService) List(r *http.Request, params *struct{}, result *Tilese
 
 	// Set default tileset
 	defaultTileset := ""
-	if current := ts.handler.webui.GetTileset(); current != nil {
+	if current := ts.webui.GetTileset(); current != nil {
 		defaultTileset = current.Name
 	}
 
@@ -274,7 +274,7 @@ func (ts *TilesetService) ProcessImage(r *http.Request, params *struct {
 
 	log.Printf("[TilesetService] ProcessImage: Applying image processing")
 
-	tileset := ts.handler.webui.GetTileset()
+	tileset := ts.webui.GetTileset()
 	if tileset == nil {
 		return fmt.Errorf("no tileset loaded")
 	}
@@ -711,7 +711,7 @@ func (ts *TilesetService) checkForChanges() {
 			if stat.ModTime().After(*lastCheck) {
 				log.Printf("[TilesetService] Detected change in %s, reloading...", path)
 				if newTileset, err := LoadTilesetConfig(path); err == nil {
-					ts.handler.webui.UpdateTileset(newTileset)
+					ts.webui.UpdateTileset(newTileset)
 					now := time.Now()
 					ts.watchedPaths[path] = &now
 				} else {

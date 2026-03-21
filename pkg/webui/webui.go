@@ -1,19 +1,12 @@
 package webui
 
 import (
-	"bytes"
 	"context"
-	"embed"
-	"encoding/json"
 	"fmt"
 	"image/png"
 	"log/slog"
 	"net/http"
-	"path/filepath"
-	"strings"
 	"time"
-
-	_ "embed"
 
 	"github.com/opd-ai/go-gamelaunch-client/pkg/dgclient"
 	"github.com/opd-ai/go-gamelaunch-www/pkg/transport"
@@ -41,25 +34,14 @@ type WebUIOptions struct {
 }
 
 // WebUI provides a web-based interface for dgclient
-// Moved from: webui.go
 type WebUI struct {
 	view           *WebView
 	tileset        *TilesetConfig
-	rpcHandler     *RPCHandler
 	tilesetService *TilesetService
 	wsHandler      *transport.Handler
 	mux            *http.ServeMux
 	options        WebUIOptions
 }
-
-//go:embed static/index.html
-var staticIndexHTML string
-
-//go:embed static/*
-var staticIndexJS embed.FS
-
-//go:embed static/style.css
-var staticIndexCSS string
 
 // NewWebUI creates a new WebUI instance
 func NewWebUI(opts WebUIOptions) (*WebUI, error) {
@@ -95,11 +77,8 @@ func NewWebUI(opts WebUIOptions) (*WebUI, error) {
 		webui.view.SetTileset(webui.tileset)
 	}
 
-	// Create RPC handler
-	webui.rpcHandler = NewRPCHandler(webui)
-
 	// Create tileset service for hot-reload support
-	webui.tilesetService = NewTilesetService(webui.rpcHandler)
+	webui.tilesetService = NewTilesetService(webui)
 
 	// Create WebSocket handler
 	webui.wsHandler = transport.NewHandler()
@@ -112,48 +91,15 @@ func NewWebUI(opts WebUIOptions) (*WebUI, error) {
 
 // setupRoutes configures HTTP routes
 func (w *WebUI) setupRoutes() {
-	// RPC endpoint
-	w.mux.HandleFunc("/rpc", w.handleRPC)
-
 	// Tileset image endpoint
 	w.mux.HandleFunc("/tileset/image", w.handleTilesetImage)
 
 	// WebSocket endpoint for real-time state updates
 	w.mux.HandleFunc("/ws", w.wsHandler.ServeHTTP)
 
-	// Static files
+	// Static files served from filesystem when StaticPath is configured
 	if w.options.StaticPath != "" {
-		// Serve from filesystem
 		w.mux.Handle("/", http.FileServer(http.Dir(w.options.StaticPath)))
-		// w.mux.Handle("/", http.StripPrefix("/static/", http.FileServer(http.Dir(w.options.StaticPath))))
-	} else {
-		// Serve embedded files
-		w.mux.HandleFunc("/", func(rw http.ResponseWriter, r *http.Request) {
-			if strings.HasSuffix(r.URL.Path, ".js") {
-				rw.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-				data, err := staticIndexJS.ReadFile(filepath.Join("static", r.URL.Path))
-				if err != nil {
-					http.Error(rw, "Failed to read static file", http.StatusInternalServerError)
-					return
-				}
-				rw.Write(data)
-			} else {
-				switch r.URL.Path {
-				case "/":
-					rw.Header().Set("Content-Type", "text/html; charset=utf-8")
-					rw.Write([]byte(staticIndexHTML))
-				case "/style.css":
-					rw.Header().Set("Content-Type", "text/css; charset=utf-8")
-					rw.Write([]byte(staticIndexCSS))
-				case "/static/style.css":
-					rw.Header().Set("Content-Type", "text/css; charset=utf-8")
-					rw.Write([]byte(staticIndexCSS))
-				default:
-					rw.Header().Set("Content-Type", "text/html; charset=utf-8")
-					rw.Write([]byte(staticIndexHTML))
-				}
-			}
-		})
 	}
 }
 
@@ -202,87 +148,6 @@ func (w *WebUI) isOriginAllowed(origin string) bool {
 		}
 	}
 	return false
-}
-
-// handleRPC processes JSON-RPC requests
-func (w *WebUI) handleRPC(rw http.ResponseWriter, r *http.Request) {
-	slog.Debug("webui.handleRPC", "method", r.Method, "path", r.URL.Path, "remote", r.RemoteAddr)
-
-	if r.Method != "POST" {
-		slog.Warn("webui.handleRPC: method not allowed", "method", r.Method)
-		http.Error(rw, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	// Parse JSON-RPC request
-	var rpcReq RPCRequest
-	if err := json.NewDecoder(r.Body).Decode(&rpcReq); err != nil {
-		slog.Error("webui.handleRPC: parse error", "error", err)
-		w.sendRPCError(rw, nil, ParseError, "Parse error")
-		return
-	}
-
-	// Validate JSON-RPC version
-	if rpcReq.JSONRPC != "2.0" {
-		slog.Warn("webui.handleRPC: invalid JSON-RPC version", "version", rpcReq.JSONRPC)
-		w.sendRPCError(rw, rpcReq.ID, InvalidRequest, "Invalid Request")
-		return
-	}
-
-	// Process request
-	ctx := r.Context()
-	response := w.rpcHandler.HandleRequest(ctx, &rpcReq)
-
-	// Ensure response is properly formed
-	if response == nil {
-		slog.Error("webui.handleRPC: nil response from handler", "method", rpcReq.Method)
-		response = &RPCResponse{
-			JSONRPC: "2.0",
-			Error: &RPCError{
-				Code:    InternalError,
-				Message: "Internal server error",
-			},
-			ID: rpcReq.ID,
-		}
-	}
-
-	// Send response
-	var responseBuffer bytes.Buffer
-	if err := json.NewEncoder(&responseBuffer).Encode(response); err != nil {
-		slog.Error("webui.handleRPC: encode error", "method", rpcReq.Method, "error", err)
-		w.sendRPCError(rw, rpcReq.ID, InternalError, "Failed to encode response")
-		return
-	}
-
-	// Only set headers and write after successful encoding
-	rw.Header().Set("Content-Type", "application/json")
-	if _, err := responseBuffer.WriteTo(rw); err != nil {
-		slog.Error("webui.handleRPC: write error", "method", rpcReq.Method, "error", err)
-		// Cannot send error response here as headers are already written
-		return
-	}
-
-	slog.Debug("webui.handleRPC done", "method", rpcReq.Method, "id", rpcReq.ID)
-}
-
-// sendRPCError sends a JSON-RPC error response
-func (w *WebUI) sendRPCError(rw http.ResponseWriter, id interface{}, code int, message string) {
-	response := &RPCResponse{
-		JSONRPC: "2.0",
-		Error: &RPCError{
-			Code:    code,
-			Message: message,
-		},
-		ID: id,
-	}
-
-	rw.Header().Set("Content-Type", "application/json")
-	rw.WriteHeader(http.StatusOK) // JSON-RPC errors still return 200
-
-	if err := json.NewEncoder(rw).Encode(response); err != nil {
-		slog.Error("webui.sendRPCError: encode failed", "error", err)
-		return
-	}
 }
 
 // handleTilesetImage serves the tileset image

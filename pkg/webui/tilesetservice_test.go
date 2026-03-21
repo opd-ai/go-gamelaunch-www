@@ -13,18 +13,16 @@ import (
 
 // TestTilesetService_NewTilesetService tests service initialization
 func TestTilesetService_NewTilesetService(t *testing.T) {
-	// Create mock WebUI and handler
 	webui := &WebUI{}
-	handler := &RPCHandler{webui: webui}
 
-	service := NewTilesetService(handler)
+	service := NewTilesetService(webui)
 
 	if service == nil {
 		t.Fatal("NewTilesetService returned nil")
 	}
 
-	if service.handler != handler {
-		t.Error("Service handler not set correctly")
+	if service.webui != webui {
+		t.Error("Service webui not set correctly")
 	}
 
 	if service.imageCache == nil {
@@ -55,8 +53,8 @@ func TestTilesetService_Fetch(t *testing.T) {
 
 	// Create mock WebUI with tileset
 	webui := &WebUI{tileset: tileset}
-	handler := &RPCHandler{webui: webui}
-	service := NewTilesetService(handler)
+	
+	service := NewTilesetService(webui)
 
 	// Create mock request
 	req := httptest.NewRequest("POST", "/rpc", nil)
@@ -97,8 +95,8 @@ func TestTilesetService_Fetch(t *testing.T) {
 func TestTilesetService_Fetch_NoTileset(t *testing.T) {
 	// Create mock WebUI without tileset
 	webui := &WebUI{}
-	handler := &RPCHandler{webui: webui}
-	service := NewTilesetService(handler)
+	
+	service := NewTilesetService(webui)
 
 	req := httptest.NewRequest("POST", "/rpc", nil)
 
@@ -157,8 +155,8 @@ func TestTilesetService_Update_WithPath(t *testing.T) {
 
 	// Create mock WebUI
 	webui := &WebUI{}
-	handler := &RPCHandler{webui: webui}
-	service := NewTilesetService(handler)
+	
+	service := NewTilesetService(webui)
 
 	req := httptest.NewRequest("POST", "/rpc", nil)
 
@@ -184,8 +182,8 @@ func TestTilesetService_Update_WithPath(t *testing.T) {
 // TestTilesetService_Update_InvalidPath tests update with invalid path
 func TestTilesetService_Update_InvalidPath(t *testing.T) {
 	webui := &WebUI{}
-	handler := &RPCHandler{webui: webui}
-	service := NewTilesetService(handler)
+	
+	service := NewTilesetService(webui)
 
 	req := httptest.NewRequest("POST", "/rpc", nil)
 
@@ -208,8 +206,8 @@ func TestTilesetService_Update_InvalidPath(t *testing.T) {
 // TestTilesetService_Update_NoParams tests update with no parameters
 func TestTilesetService_Update_NoParams(t *testing.T) {
 	webui := &WebUI{}
-	handler := &RPCHandler{webui: webui}
-	service := NewTilesetService(handler)
+	
+	service := NewTilesetService(webui)
 
 	req := httptest.NewRequest("POST", "/rpc", nil)
 
@@ -230,8 +228,8 @@ func TestTilesetService_Update_NoParams(t *testing.T) {
 // TestTilesetService_List tests tileset listing functionality
 func TestTilesetService_List(t *testing.T) {
 	webui := &WebUI{}
-	handler := &RPCHandler{webui: webui}
-	service := NewTilesetService(handler)
+	
+	service := NewTilesetService(webui)
 
 	req := httptest.NewRequest("POST", "/rpc", nil)
 
@@ -255,8 +253,8 @@ func TestTilesetService_List(t *testing.T) {
 // TestTilesetService_ProcessImage_NoTileset tests image processing without tileset
 func TestTilesetService_ProcessImage_NoTileset(t *testing.T) {
 	webui := &WebUI{}
-	handler := &RPCHandler{webui: webui}
-	service := NewTilesetService(handler)
+	
+	service := NewTilesetService(webui)
 
 	req := httptest.NewRequest("POST", "/rpc", nil)
 
@@ -369,7 +367,7 @@ func TestTilesetService_ImageAnalysis(t *testing.T) {
 
 // TestTilesetService_CacheManagement tests cache functionality
 func TestTilesetService_CacheManagement(t *testing.T) {
-	service := NewTilesetService(&RPCHandler{})
+	service := NewTilesetService(&WebUI{})
 
 	// Test cache empty initially
 	cached := service.getCachedImage("test-key")
@@ -405,7 +403,7 @@ func TestTilesetService_CacheManagement(t *testing.T) {
 
 // TestTilesetService_WatchedPaths tests path watching functionality
 func TestTilesetService_WatchedPaths(t *testing.T) {
-	service := NewTilesetService(&RPCHandler{})
+	service := NewTilesetService(&WebUI{})
 
 	// Test adding watched path
 	testPath := "/test/path/tileset.yaml"
@@ -424,7 +422,7 @@ func TestTilesetService_WatchedPaths(t *testing.T) {
 
 // TestTilesetService_HotReload tests hot-reload monitoring
 func TestTilesetService_HotReload(t *testing.T) {
-	service := NewTilesetService(&RPCHandler{})
+	service := NewTilesetService(&WebUI{})
 
 	// Test that hot-reload can be started and stopped
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
