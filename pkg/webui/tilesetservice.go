@@ -3,6 +3,7 @@ package webui
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"image"
 	"image/color"
@@ -665,9 +666,15 @@ func (ts *TilesetService) addWatchedPath(path string) {
 }
 
 func (ts *TilesetService) createTilesetFromConfig(config map[string]interface{}) (*TilesetConfig, error) {
-	// This would implement dynamic tileset creation from JSON config
-	// For now, return an error as this is complex functionality
-	return nil, fmt.Errorf("dynamic tileset creation from config not yet implemented")
+	data, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal config map: %w", err)
+	}
+	var tc TilesetConfig
+	if err := json.Unmarshal(data, &tc); err != nil {
+		return nil, fmt.Errorf("failed to deserialize tileset config: %w", err)
+	}
+	return &tc, nil
 }
 
 // StartHotReload begins monitoring watched paths for changes

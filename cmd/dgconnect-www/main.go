@@ -1,3 +1,6 @@
+// Package main implements the dgconnect-www command-line tool, which starts
+// a web-based interface for playing terminal roguelike games remotely via
+// an SSH connection to a dgamelaunch-style server.
 package main
 
 import (

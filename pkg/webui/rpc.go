@@ -181,65 +181,31 @@ func (h *RPCHandler) handleGamePoll(ctx context.Context, params json.RawMessage)
 
 	if h.webui.view == nil {
 		log.Printf("[RPC] handleGamePoll: No view available, returning timeout response")
-		return map[string]interface{}{
-			"changes": nil,
-			"version": 0,
-			"timeout": true,
-		}, nil
+		return pollTimeoutResponse(0), nil
 	}
 
-	timeout := time.Duration(pollParams.Timeout) * time.Millisecond
-	if timeout <= 0 {
-		timeout = 25 * time.Second // Default to 25 seconds
-		log.Printf("[RPC] handleGamePoll: Using default timeout of 25 seconds")
-	}
-	if timeout > 30*time.Second {
-		timeout = 30 * time.Second // Cap at 30 seconds
-		log.Printf("[RPC] handleGamePoll: Timeout capped at 30 seconds")
-	}
+	timeout := clampPollTimeout(pollParams.Timeout)
 	log.Printf("[RPC] handleGamePoll: Using timeout duration: %v", timeout)
 
-	// Create context with timeout
 	pollCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	log.Printf("[RPC] handleGamePoll: Created poll context with timeout")
 
 	stateManager := h.webui.view.stateManager
 	log.Printf("[RPC] handleGamePoll: Starting PollChangesWithContext for version %d", pollParams.Version)
 	diff, err := stateManager.PollChangesWithContext(pollCtx, pollParams.Version)
-	// Handle context cancellation gracefully
 	if err != nil {
-		if ctx.Err() == context.Canceled {
-			// Client disconnected
-			log.Printf("[RPC] handleGamePoll: Client disconnected, returning timeout response")
-			return map[string]interface{}{
-				"changes": nil,
-				"version": stateManager.GetCurrentVersion(),
-				"timeout": true,
-			}, nil
-		}
-		if ctx.Err() == context.DeadlineExceeded {
-			// Timeout reached
-			log.Printf("[RPC] handleGamePoll: Deadline exceeded, returning timeout response")
-			return map[string]interface{}{
-				"changes": nil,
-				"version": stateManager.GetCurrentVersion(),
-				"timeout": true,
-			}, nil
+		if ctx.Err() == context.Canceled || ctx.Err() == context.DeadlineExceeded {
+			log.Printf("[RPC] handleGamePoll: Context done, returning timeout response")
+			return pollTimeoutResponse(stateManager.GetCurrentVersion()), nil
 		}
 		log.Printf("[RPC] handleGamePoll: Error during polling: %v", err)
 		return nil, err
 	}
 
 	if diff == nil {
-		// Timeout - no changes
 		currentVersion := stateManager.GetCurrentVersion()
-		log.Printf("[RPC] handleGamePoll: No changes detected, timeout reached. Current version: %d", currentVersion)
-		return map[string]interface{}{
-			"changes": nil,
-			"version": currentVersion,
-			"timeout": true,
-		}, nil
+		log.Printf("[RPC] handleGamePoll: No changes detected. Current version: %d", currentVersion)
+		return pollTimeoutResponse(currentVersion), nil
 	}
 
 	log.Printf("[RPC] handleGamePoll: Changes detected, returning diff for version %d", diff.Version)
@@ -248,6 +214,27 @@ func (h *RPCHandler) handleGamePoll(ctx context.Context, params json.RawMessage)
 		"version": diff.Version,
 		"timeout": false,
 	}, nil
+}
+
+// clampPollTimeout converts a millisecond value to a bounded Duration (1ms–30s).
+func clampPollTimeout(ms int) time.Duration {
+	d := time.Duration(ms) * time.Millisecond
+	if d <= 0 {
+		return 25 * time.Second
+	}
+	if d > 30*time.Second {
+		return 30 * time.Second
+	}
+	return d
+}
+
+// pollTimeoutResponse builds the standard "no changes / timeout" poll response.
+func pollTimeoutResponse(version uint64) map[string]interface{} {
+	return map[string]interface{}{
+		"changes": nil,
+		"version": version,
+		"timeout": true,
+	}
 }
 
 func (h *RPCHandler) handleGameSendInput(ctx context.Context, params json.RawMessage) (interface{}, error) {

@@ -15,7 +15,7 @@ go get github.com/opd-ai/go-gamelaunch-client/pkg/webui
 ## Features
 
 ### Core Web Interface
-- **Browser-Based Terminal Emulation** - Full terminal rendering in web browsers using HTML5 Canvas with WebGL acceleration
+- **Browser-Based Terminal Emulation** - Full terminal rendering in web browsers using HTML5 Canvas 2D rendering
 - **Real-Time Game Updates** - Efficient state synchronization with diff-based polling and minimal bandwidth usage
 - **JSON-RPC 2.0 API** - Standard RPC communication protocol for game state management and user input handling
 - **Embedded Static Assets** - Self-contained web server with embedded HTML, CSS, and JavaScript resources

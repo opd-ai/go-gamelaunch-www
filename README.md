@@ -86,11 +86,14 @@ mappings:
 
 ### JSON-RPC Methods
 
-- `Game.GetState` - Retrieve current game state
-- `Game.Poll` - Long-poll for state changes
-- `Game.SendInput` - Send user input to game
-- `Session.Info` - Get session information
-- `Tileset.Fetch` - Retrieve tileset configuration
+- `game.getState` - Retrieve current game state
+- `game.poll` - Long-poll for state changes
+- `game.sendInput` - Send user input to game
+- `game.resize` - Resize the terminal window
+- `game.disconnect` - Disconnect from the game session
+- `session.info` - Get session information
+- `tileset.fetch` - Retrieve tileset configuration
+- `tileset.update` - Update the active tileset
 
 ### HTTP Endpoints
 
