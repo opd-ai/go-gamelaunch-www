@@ -1,3 +1,8 @@
+// Package webui provides the legacy JSON-RPC and polling web interface.
+//
+// Deprecated: The JSON-RPC polling interface is superseded by the Ebitengine
+// WASM client (pkg/wasm) and WebSocket transport (pkg/transport). New
+// deployments should use the WASM client; see docs/MIGRATION.md.
 package webui
 
 import (
@@ -9,12 +14,19 @@ import (
 )
 
 // RPCHandler handles JSON-RPC requests via a manual dispatch switch.
+//
+// Deprecated: Use the WebSocket-based transport in pkg/transport together with
+// the Ebitengine WASM client in pkg/wasm. This handler will be removed in a
+// future release.
 type RPCHandler struct {
 	webui *WebUI
 }
 
 // NewRPCHandler creates a new RPC handler.
+//
+// Deprecated: See RPCHandler for migration guidance.
 func NewRPCHandler(webui *WebUI) *RPCHandler {
+	slog.Warn("webui: JSON-RPC handler is deprecated; migrate to the WebSocket/WASM transport")
 	return &RPCHandler{webui: webui}
 }
 

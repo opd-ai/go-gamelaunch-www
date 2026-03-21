@@ -4,9 +4,10 @@ A modern web-based interface for playing terminal-based roguelike games remotely
 
 ## Features
 
+- **Ebitengine WASM Client** - Native-speed browser rendering via WebAssembly; no plugin required
+- **WebSocket Transport** - Real-time bidirectional communication replacing JSON-RPC polling
 - **Browser-Based Terminal Emulation** - Full terminal rendering in web browsers with real-time updates
 - **Tileset Graphics Support** - Configurable YAML-based tileset system with PNG/JPEG/GIF support
-- **JSON-RPC 2.0 API** - Standard RPC communication for game state management and input handling
 - **SSH Integration** - Seamless connectivity to dgamelaunch-style servers via go-gamelaunch-client
 - **Real-Time Synchronization** - Efficient state management with differential updates
 - **CORS Support** - Configurable cross-origin resource sharing for flexible deployment
@@ -63,6 +64,48 @@ func main() {
 }
 ```
 
+## WASM Deployment (Recommended)
+
+The recommended deployment uses the Ebitengine WebAssembly client:
+
+### 1. Build the WASM binary
+
+```bash
+make wasm
+# Produces static/gamelaunch.wasm and static/wasm_exec.js
+```
+
+### 2. Serve the game server with WebSocket support
+
+```go
+package main
+
+import (
+    "log"
+    "github.com/opd-ai/go-gamelaunch-www/pkg/webui"
+    "github.com/opd-ai/go-gamelaunch-client/pkg/dgclient"
+)
+
+func main() {
+    view, err := webui.NewWebView(dgclient.ViewOptions{Width: 80, Height: 24})
+    if err != nil {
+        log.Fatal(err)
+    }
+    ui, err := webui.NewWebUI(webui.WebUIOptions{
+        View:       view,
+        StaticPath: "static", // serve the WASM build artifacts
+    })
+    if err != nil {
+        log.Fatal(err)
+    }
+    log.Fatal(ui.Start(":8080"))
+}
+```
+
+The WASM client connects to the `/ws` WebSocket endpoint for real-time game state updates.
+
+> **Migrating from JSON-RPC?** See [docs/MIGRATION.md](docs/MIGRATION.md).
+
 ## Tileset Configuration
 
 Create a `tileset.yaml` file to configure graphics:
@@ -105,15 +148,18 @@ mappings:
 
 The project uses a layered architecture:
 
-- **WebView Layer** - Implements dgclient.View interface for terminal-to-web conversion
-- **WebUI Layer** - HTTP server with embedded static assets and JSON-RPC endpoints
+- **WASM Client Layer** (`pkg/wasm`) - Ebitengine game loop running in the browser via WebAssembly
+- **WebSocket Transport** (`pkg/transport`) - Real-time bidirectional server↔client communication
+- **Static Server** (`pkg/server`) - Minimal file server for WASM deployment artifacts
+- **WebView Layer** (`pkg/webui`) - Implements dgclient.View interface for terminal-to-web conversion
 - **State Management** - Version-controlled state synchronization with change detection
 - **Tileset System** - YAML-configured graphics with runtime image processing
 
 ## Dependencies
 
 - [go-gamelaunch-client](https://github.com/opd-ai/go-gamelaunch-client) - SSH client library
-- [gorilla/rpc](https://github.com/gorilla/rpc) - JSON-RPC server
+- [ebiten/v2](https://github.com/hajimehoshi/ebiten) - Ebitengine 2D game engine (WASM client)
+- [nhooyr.io/websocket](https://github.com/nhooyr/websocket) - WebSocket server/client
 - [fatih/color](https://github.com/fatih/color) - Terminal color processing
 - [gopkg.in/yaml.v3](https://gopkg.in/yaml.v3) - YAML configuration
 
