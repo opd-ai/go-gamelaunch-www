@@ -60,6 +60,16 @@ var staticIndexCSS string
 
 // NewWebUI creates a new WebUI instance
 func NewWebUI(opts WebUIOptions) (*WebUI, error) {
+	// Validate required View parameter
+	if opts.View == nil {
+		return nil, fmt.Errorf("view is required in WebUIOptions")
+	}
+
+	// Set default PollTimeout if not specified
+	if opts.PollTimeout == 0 {
+		opts.PollTimeout = 30 * time.Second
+	}
+
 	webui := &WebUI{
 		view:    opts.View,
 		options: opts,

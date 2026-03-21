@@ -304,67 +304,99 @@ func (v *WebView) getCurrentState() *GameState {
 // processTerminalData parses terminal escape sequences and updates buffer
 // Moved from: view.go
 func (v *WebView) processTerminalData(data []byte) {
-	i := 0
-	for i < len(data) {
+	for i := 0; i < len(data); i++ {
 		b := data[i]
 
 		if v.inEscapeSeq {
-			// Check for buffer overflow protection FIRST before appending
-			if len(v.escapeBuffer) >= 32 {
-				// Log the potential attack attempt for security monitoring
-				fmt.Printf("SECURITY WARNING: Escape sequence buffer overflow attempt detected, resetting\n")
-				// Reset escape sequence state and continue processing
-				v.escapeBuffer = v.escapeBuffer[:0]
-				v.inEscapeSeq = false
-				continue // Don't increment i, reprocess this byte as normal character
+			if !v.processEscapeByte(b) {
+				continue
 			}
-			v.escapeBuffer = append(v.escapeBuffer, b)
-			if v.processEscapeSequence(b) {
-				v.inEscapeSeq = false
-				v.escapeBuffer = v.escapeBuffer[:0]
-			}
-			i++
+			i-- // Reprocess byte if escape overflow
 			continue
 		}
 
-		switch b {
-		case '\x1b': // ESC
-			v.inEscapeSeq = true
-			v.escapeBuffer = append(v.escapeBuffer[:0], b)
-		case '\n':
-			v.cursorY++
-			v.cursorX = 0
-			if v.cursorY >= v.height {
-				v.scrollUp()
-				v.cursorY = v.height - 1
-			}
-		case '\r':
-			v.cursorX = 0
-		case '\b':
-			if v.cursorX > 0 {
-				v.cursorX--
-			}
-		case '\t':
-			// Tab to next 8-character boundary
-			v.cursorX = ((v.cursorX / 8) + 1) * 8
-			if v.cursorX >= v.width {
-				v.cursorX = 0
-				v.cursorY++
-				if v.cursorY >= v.height {
-					v.scrollUp()
-					v.cursorY = v.height - 1
-				}
-			}
-		default:
-			if b >= 32 && b < 127 { // Printable ASCII
-				v.writeCharacter(rune(b))
-			} else if b >= 128 { // UTF-8 continuation or start
-				// For simplicity, treat as printable character
-				// In production, you'd want proper UTF-8 handling
-				v.writeCharacter(rune(b))
-			}
+		v.processControlChar(b)
+	}
+}
+
+// processEscapeByte handles a byte during escape sequence processing
+// Returns true if escape sequence was reset due to overflow
+func (v *WebView) processEscapeByte(b byte) bool {
+	// Check for buffer overflow protection
+	if len(v.escapeBuffer) >= 32 {
+		fmt.Printf("SECURITY WARNING: Escape sequence buffer overflow attempt detected, resetting\n")
+		v.escapeBuffer = v.escapeBuffer[:0]
+		v.inEscapeSeq = false
+		return true
+	}
+	v.escapeBuffer = append(v.escapeBuffer, b)
+	if v.processEscapeSequence(b) {
+		v.inEscapeSeq = false
+		v.escapeBuffer = v.escapeBuffer[:0]
+	}
+	return false
+}
+
+// processControlChar handles control characters and printable characters
+func (v *WebView) processControlChar(b byte) {
+	switch b {
+	case '\x1b': // ESC
+		v.startEscapeSequence()
+	case '\n':
+		v.handleNewline()
+	case '\r':
+		v.cursorX = 0
+	case '\b':
+		v.handleBackspace()
+	case '\t':
+		v.handleTab()
+	default:
+		v.handlePrintableChar(b)
+	}
+}
+
+// startEscapeSequence begins an escape sequence
+func (v *WebView) startEscapeSequence() {
+	v.inEscapeSeq = true
+	v.escapeBuffer = append(v.escapeBuffer[:0], '\x1b')
+}
+
+// handleNewline processes newline character
+func (v *WebView) handleNewline() {
+	v.cursorY++
+	v.cursorX = 0
+	if v.cursorY >= v.height {
+		v.scrollUp()
+		v.cursorY = v.height - 1
+	}
+}
+
+// handleBackspace processes backspace character
+func (v *WebView) handleBackspace() {
+	if v.cursorX > 0 {
+		v.cursorX--
+	}
+}
+
+// handleTab processes tab character
+func (v *WebView) handleTab() {
+	v.cursorX = ((v.cursorX / 8) + 1) * 8
+	if v.cursorX >= v.width {
+		v.cursorX = 0
+		v.cursorY++
+		if v.cursorY >= v.height {
+			v.scrollUp()
+			v.cursorY = v.height - 1
 		}
-		i++
+	}
+}
+
+// handlePrintableChar processes printable characters
+func (v *WebView) handlePrintableChar(b byte) {
+	if b >= 32 && b < 127 { // Printable ASCII
+		v.writeCharacter(rune(b))
+	} else if b >= 128 { // UTF-8 continuation or start
+		v.writeCharacter(rune(b))
 	}
 }
 
@@ -427,29 +459,27 @@ func (v *WebView) processEscapeSequence(b byte) bool {
 // handleCSISequence processes complete CSI escape sequences
 // Moved from: view.go
 func (v *WebView) handleCSISequence(seq string) {
-	if strings.HasSuffix(seq, "m") {
-		// SGR (Select Graphic Rendition) - color and attributes
+	if len(seq) == 0 {
+		return
+	}
+
+	lastChar := seq[len(seq)-1]
+	switch lastChar {
+	case 'm':
 		v.handleSGRSequence(seq)
-	} else if strings.HasSuffix(seq, "H") || strings.HasSuffix(seq, "f") {
-		// Cursor position
+	case 'H', 'f':
 		v.handleCursorPosition(seq)
-	} else if strings.HasSuffix(seq, "J") {
-		// Erase display
+	case 'J':
 		v.handleEraseDisplay(seq)
-	} else if strings.HasSuffix(seq, "K") {
-		// Erase line
+	case 'K':
 		v.handleEraseLine(seq)
-	} else if strings.HasSuffix(seq, "A") {
-		// Cursor up
+	case 'A':
 		v.handleCursorMove(seq, 0, -1)
-	} else if strings.HasSuffix(seq, "B") {
-		// Cursor down
+	case 'B':
 		v.handleCursorMove(seq, 0, 1)
-	} else if strings.HasSuffix(seq, "C") {
-		// Cursor right
+	case 'C':
 		v.handleCursorMove(seq, 1, 0)
-	} else if strings.HasSuffix(seq, "D") {
-		// Cursor left
+	case 'D':
 		v.handleCursorMove(seq, -1, 0)
 	}
 }
@@ -604,30 +634,49 @@ func (v *WebView) resetTerminalState() {
 // Moved from: view.go
 func (v *WebView) writeCharacter(char rune) {
 	if v.cursorX < v.width && v.cursorY < v.height {
-		cell := &v.buffer[v.cursorY][v.cursorX]
-		cell.Char = char
-		cell.FgColor = v.currentFgColor
-		cell.BgColor = v.currentBgColor
-		cell.Bold = v.currentBold
-		cell.Inverse = v.currentInverse
-		cell.Blink = v.currentBlink
-		cell.Changed = true
-
-		// Apply tileset mapping if available
-		if v.tileset != nil {
-			if mapping := v.tileset.GetMapping(char); mapping != nil {
-				cell.TileX = mapping.X
-				cell.TileY = mapping.Y
-				if mapping.FgColor != "" {
-					cell.FgColor = mapping.FgColor
-				}
-				if mapping.BgColor != "" {
-					cell.BgColor = mapping.BgColor
-				}
-			}
-		}
+		v.setCellChar(v.cursorX, v.cursorY, char)
 	}
 
+	v.advanceCursor()
+}
+
+// setCellChar sets a character at the given position with current attributes
+func (v *WebView) setCellChar(x, y int, char rune) {
+	cell := &v.buffer[y][x]
+	cell.Char = char
+	cell.FgColor = v.currentFgColor
+	cell.BgColor = v.currentBgColor
+	cell.Bold = v.currentBold
+	cell.Inverse = v.currentInverse
+	cell.Blink = v.currentBlink
+	cell.Changed = true
+
+	v.applyTilesetMapping(cell, char)
+}
+
+// applyTilesetMapping applies tileset mapping to a cell if available
+func (v *WebView) applyTilesetMapping(cell *Cell, char rune) {
+	if v.tileset == nil {
+		return
+	}
+
+	mapping := v.tileset.GetMapping(char)
+	if mapping == nil {
+		return
+	}
+
+	cell.TileX = mapping.X
+	cell.TileY = mapping.Y
+	if mapping.FgColor != "" {
+		cell.FgColor = mapping.FgColor
+	}
+	if mapping.BgColor != "" {
+		cell.BgColor = mapping.BgColor
+	}
+}
+
+// advanceCursor moves the cursor forward, wrapping as needed
+func (v *WebView) advanceCursor() {
 	v.cursorX++
 	if v.cursorX >= v.width {
 		v.cursorX = 0

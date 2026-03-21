@@ -18,6 +18,28 @@ import (
 	"time"
 )
 
+// clampFloat clamps a float64 value to the range [0, 1]
+func clampFloat(v float64) float64 {
+	if v < 0 {
+		return 0
+	}
+	if v > 1 {
+		return 1
+	}
+	return v
+}
+
+// clampInt clamps an int value to the range [0, 255]
+func clampInt(v int) int {
+	if v < 0 {
+		return 0
+	}
+	if v > 255 {
+		return 255
+	}
+	return v
+}
+
 // TilesetService provides advanced tileset management with runtime processing
 type TilesetService struct {
 	handler *RPCHandler
@@ -239,7 +261,8 @@ func (ts *TilesetService) List(r *http.Request, params *struct{}, result *Tilese
 // ProcessImage applies advanced image processing to a tileset
 func (ts *TilesetService) ProcessImage(r *http.Request, params *struct {
 	Options ProcessingOptions `json:"options"`
-}, result *map[string]interface{}) error {
+}, result *map[string]interface{},
+) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
@@ -394,29 +417,9 @@ func (ts *TilesetService) adjustContrast(img *image.RGBA, factor float64) {
 			g := float64(c.G) / 255.0
 			b := float64(c.B) / 255.0
 
-			r = ((r - 0.5) * factor) + 0.5
-			g = ((g - 0.5) * factor) + 0.5
-			b = ((b - 0.5) * factor) + 0.5
-
-			// Clamp values
-			if r < 0 {
-				r = 0
-			}
-			if r > 1 {
-				r = 1
-			}
-			if g < 0 {
-				g = 0
-			}
-			if g > 1 {
-				g = 1
-			}
-			if b < 0 {
-				b = 0
-			}
-			if b > 1 {
-				b = 1
-			}
+			r = clampFloat(((r - 0.5) * factor) + 0.5)
+			g = clampFloat(((g - 0.5) * factor) + 0.5)
+			b = clampFloat(((b - 0.5) * factor) + 0.5)
 
 			c.R = uint8(r * 255)
 			c.G = uint8(g * 255)
@@ -451,29 +454,9 @@ func (ts *TilesetService) applySharpen(img *image.RGBA) {
 			right := original.RGBAAt(x+1, y)
 
 			// Apply sharpening formula: 5*center - (top + bottom + left + right)
-			r := int(center.R)*5 - (int(top.R) + int(bottom.R) + int(left.R) + int(right.R))
-			g := int(center.G)*5 - (int(top.G) + int(bottom.G) + int(left.G) + int(right.G))
-			b := int(center.B)*5 - (int(top.B) + int(bottom.B) + int(left.B) + int(right.B))
-
-			// Clamp values
-			if r < 0 {
-				r = 0
-			}
-			if r > 255 {
-				r = 255
-			}
-			if g < 0 {
-				g = 0
-			}
-			if g > 255 {
-				g = 255
-			}
-			if b < 0 {
-				b = 0
-			}
-			if b > 255 {
-				b = 255
-			}
+			r := clampInt(int(center.R)*5 - (int(top.R) + int(bottom.R) + int(left.R) + int(right.R)))
+			g := clampInt(int(center.G)*5 - (int(top.G) + int(bottom.G) + int(left.G) + int(right.G)))
+			b := clampInt(int(center.B)*5 - (int(top.B) + int(bottom.B) + int(left.B) + int(right.B)))
 
 			img.SetRGBA(x, y, color.RGBA{uint8(r), uint8(g), uint8(b), center.A})
 		}

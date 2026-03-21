@@ -1,10 +1,11 @@
 module github.com/opd-ai/go-gamelaunch-www
 
-go 1.23.2
+go 1.24.0
 
 require (
 	github.com/fatih/color v1.18.0
 	github.com/gorilla/rpc v1.2.1
+	github.com/hajimehoshi/ebiten/v2 v2.9.9
 	github.com/opd-ai/go-gamelaunch-client v0.0.0-20250601154701-8023560de4fc
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/viper v1.20.1
@@ -14,9 +15,13 @@ require (
 )
 
 require (
+	github.com/ebitengine/gomobile v0.0.0-20250923094054-ea854a63cce1 // indirect
+	github.com/ebitengine/hideconsole v1.0.0 // indirect
+	github.com/ebitengine/purego v0.9.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jezek/xgb v1.1.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
@@ -28,6 +33,8 @@ require (
 	github.com/subosito/gotenv v1.6.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	go.uber.org/multierr v1.9.0 // indirect
-	golang.org/x/sys v0.33.0 // indirect
-	golang.org/x/text v0.25.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
+	golang.org/x/text v0.29.0 // indirect
+	nhooyr.io/websocket v1.8.17 // indirect
 )

@@ -50,7 +50,7 @@ func color256ToRGB(index uint8) (r, g, b int) {
 		r = int((index / 36) * 51)
 		g = int(((index % 36) / 6) * 51)
 		b = int((index % 6) * 51)
-		return
+		return r, g, b
 	default:
 		// Grayscale ramp (232-255)
 		gray := int((index-232)*10 + 8)

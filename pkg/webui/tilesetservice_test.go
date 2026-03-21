@@ -138,7 +138,7 @@ func TestTilesetService_Update_WithPath(t *testing.T) {
       y: 0
 `
 
-	err := os.WriteFile(tilesetPath, []byte(tilesetContent), 0644)
+	err := os.WriteFile(tilesetPath, []byte(tilesetContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test tileset file: %v", err)
 	}

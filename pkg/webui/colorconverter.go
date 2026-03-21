@@ -82,11 +82,11 @@ func (cc *ColorConverter) ProcessSGRParams(params []string) (fgColor, bgColor st
 		}
 	}
 
-	return
+	return fgColor, bgColor, bold, inverse, blink
 }
 
 // parseExtendedColor handles 256-color and RGB color parsing
-// Moved from: color.go
+// Uses direct conversion methods instead of colorToHex to avoid ANSI parsing issues
 func (cc *ColorConverter) parseExtendedColor(params []string) (string, int) {
 	if len(params) == 0 {
 		return "", 0
@@ -98,21 +98,17 @@ func (cc *ColorConverter) parseExtendedColor(params []string) (string, int) {
 	}
 
 	switch mode {
-	case 2: // RGB color
+	case 2: // RGB color - use direct RGB to hex conversion
 		if len(params) >= 4 {
 			r, _ := strconv.Atoi(params[1])
 			g, _ := strconv.Atoi(params[2])
 			b, _ := strconv.Atoi(params[3])
-			// Use library's RGB color creation
-			c := color.RGB(r, g, b)
-			return cc.colorToHex(c), 4
+			return cc.rgbToHex(r, g, b), 4
 		}
-	case 5: // 256-color palette
+	case 5: // 256-color palette - use direct color256 to hex conversion
 		if len(params) >= 2 {
 			idx, _ := strconv.Atoi(params[1])
-			// Use library's 256-color support
-			c := Color256(uint8(idx))
-			return cc.colorToHex(c), 2
+			return cc.color256ToHex(idx), 2
 		}
 	}
 
@@ -157,90 +153,99 @@ func (cc *ColorConverter) standardColorToHex(colorIndex int, bright bool) string
 	return standardColors[colorIndex]
 }
 
+// ansiCodeToHex maps standard ANSI color codes to hex values
+var ansiCodeToHex = map[string]string{
+	"30": "#000000", // Black
+	"31": "#800000", // Dark Red
+	"32": "#008000", // Dark Green
+	"33": "#808000", // Dark Yellow
+	"34": "#000080", // Dark Blue
+	"35": "#800080", // Dark Magenta
+	"36": "#008080", // Dark Cyan
+	"37": "#C0C0C0", // Light Gray
+	"90": "#808080", // Dark Gray
+	"91": "#FF0000", // Bright Red
+	"92": "#00FF00", // Bright Green
+	"93": "#FFFF00", // Bright Yellow
+	"94": "#0000FF", // Bright Blue
+	"95": "#FF00FF", // Bright Magenta
+	"96": "#00FFFF", // Bright Cyan
+	"97": "#FFFFFF", // White
+}
+
 // colorToHex converts a fatih/color Color to hex format
 // Moved from: color.go
 func (cc *ColorConverter) colorToHex(c *color.Color) string {
-	// Handle nil color
 	if c == nil {
 		return "#FFFFFF"
 	}
 
-	// Since fatih/color doesn't expose attributes directly, we'll use a more reliable approach
-	// Try to format some text and extract ANSI sequence
-	formatted := c.SprintFunc()("X") // Format a single character to get escape sequences
+	parts := cc.extractANSIParts(c)
+	if parts == nil {
+		return "#FFFFFF"
+	}
 
-	// Extract ANSI escape sequence
+	// Check standard color codes first
+	if hex := cc.lookupStandardColor(parts); hex != "" {
+		return hex
+	}
+
+	// Check extended color sequences
+	if hex := cc.parseExtendedColorSequence(parts); hex != "" {
+		return hex
+	}
+
+	return "#FFFFFF"
+}
+
+// extractANSIParts extracts ANSI sequence parts from a color object
+func (cc *ColorConverter) extractANSIParts(c *color.Color) []string {
+	formatted := c.SprintFunc()("X")
+
 	start := strings.Index(formatted, "\x1b[")
 	if start == -1 {
-		return "#FFFFFF"
+		return nil
 	}
 
 	end := strings.Index(formatted[start:], "m")
 	if end == -1 {
-		return "#FFFFFF"
+		return nil
 	}
 
-	// Extract the sequence parameters
 	sequence := formatted[start+2 : start+end]
+	return strings.Split(sequence, ";")
+}
 
-	// Split by semicolon to handle multiple parameters
-	parts := strings.Split(sequence, ";")
-
-	// Process each part to find color codes
+// lookupStandardColor checks if any part matches a standard ANSI color code
+func (cc *ColorConverter) lookupStandardColor(parts []string) string {
 	for _, part := range parts {
-		switch part {
-		case "30":
-			return "#000000" // Black
-		case "31":
-			return "#800000" // Dark Red
-		case "32":
-			return "#008000" // Dark Green
-		case "33":
-			return "#808000" // Dark Yellow
-		case "34":
-			return "#000080" // Dark Blue
-		case "35":
-			return "#800080" // Dark Magenta
-		case "36":
-			return "#008080" // Dark Cyan
-		case "37":
-			return "#C0C0C0" // Light Gray
-		case "90":
-			return "#808080" // Dark Gray
-		case "91":
-			return "#FF0000" // Bright Red
-		case "92":
-			return "#00FF00" // Bright Green
-		case "93":
-			return "#FFFF00" // Bright Yellow
-		case "94":
-			return "#0000FF" // Bright Blue
-		case "95":
-			return "#FF00FF" // Bright Magenta
-		case "96":
-			return "#00FFFF" // Bright Cyan
-		case "97":
-			return "#FFFFFF" // White
+		if hex, ok := ansiCodeToHex[part]; ok {
+			return hex
 		}
 	}
+	return ""
+}
 
-	// Handle extended color sequences
-	if len(parts) >= 3 && parts[0] == "38" {
-		if parts[1] == "2" && len(parts) >= 5 {
-			// RGB format: 38;2;r;g;b
+// parseExtendedColorSequence handles 38;2;r;g;b (RGB) and 38;5;n (256-color) sequences
+func (cc *ColorConverter) parseExtendedColorSequence(parts []string) string {
+	if len(parts) < 3 || parts[0] != "38" {
+		return ""
+	}
+
+	switch parts[1] {
+	case "2": // RGB format
+		if len(parts) >= 5 {
 			r, _ := strconv.Atoi(parts[2])
 			g, _ := strconv.Atoi(parts[3])
 			b, _ := strconv.Atoi(parts[4])
 			return cc.rgbToHex(r, g, b)
-		} else if parts[1] == "5" && len(parts) >= 3 {
-			// 256-color format: 38;5;n
-			idx, _ := strconv.Atoi(parts[2])
-			return cc.color256ToHex(idx)
 		}
+	case "5": // 256-color format
+		idx, _ := strconv.Atoi(parts[2])
+		return cc.color256ToHex(idx)
 	}
 
-	// Default fallback
-	return "#FFFFFF"
+	return ""
 }
 
 // rgbToHex converts RGB values to hex format
@@ -266,20 +271,24 @@ func (cc *ColorConverter) rgbToHex(r, g, b int) string {
 }
 
 // color256ToHex converts 256-color palette index to hex format
+// Accepts indices 0-255, returns fallback #FFFFFF for out-of-range values
 func (cc *ColorConverter) color256ToHex(idx int) string {
+	// Explicit bounds validation
+	if idx < 0 || idx > 255 {
+		return "#FFFFFF"
+	}
+
 	// Standard 16 colors (0-15)
 	if idx < 16 {
 		colors := []string{
 			"#000000", "#800000", "#008000", "#808000", "#000080", "#800080", "#008080", "#C0C0C0",
 			"#808080", "#FF0000", "#00FF00", "#FFFF00", "#0000FF", "#FF00FF", "#00FFFF", "#FFFFFF",
 		}
-		if idx >= 0 && idx < len(colors) {
-			return colors[idx]
-		}
+		return colors[idx]
 	}
 
 	// 216-color cube (16-231)
-	if idx >= 16 && idx <= 231 {
+	if idx <= 231 {
 		idx -= 16
 		r := (idx / 36) * 51
 		g := ((idx % 36) / 6) * 51
@@ -288,10 +297,6 @@ func (cc *ColorConverter) color256ToHex(idx int) string {
 	}
 
 	// Grayscale ramp (232-255)
-	if idx >= 232 && idx <= 255 {
-		gray := 8 + (idx-232)*10
-		return cc.rgbToHex(gray, gray, gray)
-	}
-
-	return "#FFFFFF"
+	gray := 8 + (idx-232)*10
+	return cc.rgbToHex(gray, gray, gray)
 }

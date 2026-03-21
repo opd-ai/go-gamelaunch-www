@@ -77,36 +77,57 @@ func (sm *StateManager) GetCurrentVersion() uint64 {
 	return sm.version
 }
 
-// PollChanges waits for changes since the given client version
-// Moved from: state.go
-func (sm *StateManager) PollChanges(clientVersion uint64, timeout time.Duration) (*StateDiff, error) {
+// waiterRegistration holds the state needed for change polling
+type waiterRegistration struct {
+	waiterCh  chan *StateDiff
+	uniqueKey string
+	cleanup   func()
+}
+
+// registerWaiter creates and registers a waiter channel, returning nil if client is already behind
+func (sm *StateManager) registerWaiter(clientVersion uint64) (*waiterRegistration, *StateDiff) {
 	sm.mu.RLock()
 	currentVersion := sm.version
 	sm.mu.RUnlock()
 
 	// If client is behind, return immediate diff
 	if clientVersion < currentVersion {
-		return sm.generateDiffFromVersion(clientVersion)
+		diff, _ := sm.generateDiffFromVersion(clientVersion)
+		return nil, diff
 	}
 
-	// Wait for next change
+	// Create and register waiter
 	waiterCh := make(chan *StateDiff, 1)
-
-	// Generate unique key combining version and timestamp to prevent collision
 	uniqueKey := fmt.Sprintf("%d-%d", clientVersion, time.Now().UnixNano())
 
 	sm.waitersMu.Lock()
 	sm.waiters[uniqueKey] = waiterCh
 	sm.waitersMu.Unlock()
 
-	defer func() {
+	cleanup := func() {
 		sm.waitersMu.Lock()
 		delete(sm.waiters, uniqueKey)
 		sm.waitersMu.Unlock()
-	}()
+	}
+
+	return &waiterRegistration{
+		waiterCh:  waiterCh,
+		uniqueKey: uniqueKey,
+		cleanup:   cleanup,
+	}, nil
+}
+
+// PollChanges waits for changes since the given client version
+// Moved from: state.go
+func (sm *StateManager) PollChanges(clientVersion uint64, timeout time.Duration) (*StateDiff, error) {
+	reg, immediateDiff := sm.registerWaiter(clientVersion)
+	if immediateDiff != nil {
+		return immediateDiff, nil
+	}
+	defer reg.cleanup()
 
 	select {
-	case diff := <-waiterCh:
+	case diff := <-reg.waiterCh:
 		return diff, nil
 	case <-time.After(timeout):
 		return nil, nil // Timeout
@@ -140,32 +161,14 @@ func (sm *StateManager) notifyWaiters(diff *StateDiff) {
 // It is a context-aware version of PollChanges
 // Moved from: state.go
 func (sm *StateManager) PollChangesWithContext(pollCtx context.Context, version uint64) (*StateDiff, error) {
-	sm.mu.RLock()
-	currentVersion := sm.version
-	sm.mu.RUnlock()
-
-	// If client is behind, return immediate diff
-	if version < currentVersion {
-		return sm.generateDiffFromVersion(version)
+	reg, immediateDiff := sm.registerWaiter(version)
+	if immediateDiff != nil {
+		return immediateDiff, nil
 	}
-
-	// Wait for next change
-	waiterCh := make(chan *StateDiff, 1)
-
-	uniqueKey := fmt.Sprintf("%d-%d", version, time.Now().UnixNano())
-
-	sm.waitersMu.Lock()
-	sm.waiters[uniqueKey] = waiterCh
-	sm.waitersMu.Unlock()
-
-	defer func() {
-		sm.waitersMu.Lock()
-		delete(sm.waiters, uniqueKey)
-		sm.waitersMu.Unlock()
-	}()
+	defer reg.cleanup()
 
 	select {
-	case diff := <-waiterCh:
+	case diff := <-reg.waiterCh:
 		return diff, nil
 	case <-pollCtx.Done():
 		return nil, pollCtx.Err() // Context cancelled or deadline exceeded

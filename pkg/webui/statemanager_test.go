@@ -590,7 +590,6 @@ func TestStateManager_generateDiffFromVersion_ReturnsFullState_WithAllCells(t *t
 
 	// Generate diff from old version
 	diff, err := sm.generateDiffFromVersion(1)
-
 	if err != nil {
 		t.Fatalf("generateDiffFromVersion() error = %v", err)
 	}

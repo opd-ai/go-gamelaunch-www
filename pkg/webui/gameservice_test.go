@@ -102,7 +102,6 @@ func TestGameService_GetState_Success(t *testing.T) {
 
 	// Execute
 	err := service.GetState(req, args, &reply)
-
 	// Assert
 	if err != nil {
 		t.Errorf("GetState() error = %v, want nil", err)
@@ -174,7 +173,6 @@ func TestGameService_Poll_Success(t *testing.T) {
 
 	// Execute
 	err := service.Poll(req, args, &reply)
-
 	// Assert
 	if err != nil {
 		t.Errorf("Poll() error = %v, want nil", err)
@@ -251,7 +249,6 @@ func TestGameService_SendInput_Success(t *testing.T) {
 
 	// Execute
 	err := service.SendInput(req, args, &reply)
-
 	// Assert
 	if err != nil {
 		t.Errorf("SendInput() error = %v, want nil", err)

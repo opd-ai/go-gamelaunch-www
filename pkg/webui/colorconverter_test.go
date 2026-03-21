@@ -173,22 +173,22 @@ func TestProcessSGRParams_ExtendedColors_ProcessesCorrectly(t *testing.T) {
 	}{
 		{
 			name:        "256-color foreground",
-			params:      []string{"38", "5", "196"}, // Bright red in 256-color
-			expectedFg:  "#FFFFFF",                  // Default since colorToHex returns default
+			params:      []string{"38", "5", "196"}, // Bright red in 256-color (index 196 in 6x6x6 cube)
+			expectedFg:  "#FF0000",                  // Index 196 = (196-16)/36=5, rem 0/6=0, rem 0 => RGB(255,0,0)
 			expectedBg:  "#000000",
 			description: "Should process 256-color foreground code",
 		},
 		{
 			name:        "256-color background",
-			params:      []string{"48", "5", "21"}, // Blue in 256-color
+			params:      []string{"48", "5", "21"}, // Blue in 256-color (index 21 in 6x6x6 cube)
 			expectedFg:  "#FFFFFF",
-			expectedBg:  "#FFFFFF", // Default since colorToHex returns default
+			expectedBg:  "#0000FF", // Index 21 = (21-16)/36=0, rem 5/6=0, rem 5 => RGB(0,0,255)
 			description: "Should process 256-color background code",
 		},
 		{
 			name:        "RGB foreground",
 			params:      []string{"38", "2", "255", "128", "0"}, // Orange RGB
-			expectedFg:  "#FFFFFF",                              // Default since colorToHex returns default
+			expectedFg:  "#FF8000",                              // Direct RGB conversion
 			expectedBg:  "#000000",
 			description: "Should process RGB foreground color",
 		},
@@ -196,7 +196,7 @@ func TestProcessSGRParams_ExtendedColors_ProcessesCorrectly(t *testing.T) {
 			name:        "RGB background",
 			params:      []string{"48", "2", "0", "255", "128"}, // Green-cyan RGB
 			expectedFg:  "#FFFFFF",
-			expectedBg:  "#FFFFFF", // Default since colorToHex returns default
+			expectedBg:  "#00FF80", // Direct RGB conversion
 			description: "Should process RGB background color",
 		},
 		{
@@ -212,6 +212,20 @@ func TestProcessSGRParams_ExtendedColors_ProcessesCorrectly(t *testing.T) {
 			expectedFg:  "#FFFFFF",
 			expectedBg:  "#000000",
 			description: "Should reset background to default",
+		},
+		{
+			name:        "256-color white (index 15)",
+			params:      []string{"38", "5", "15"}, // Standard white
+			expectedFg:  "#FFFFFF",
+			expectedBg:  "#000000",
+			description: "Should process 256-color white correctly",
+		},
+		{
+			name:        "256-color grayscale",
+			params:      []string{"38", "5", "240"}, // Grayscale value
+			expectedFg:  "#585858",                  // Index 240 = 8 + (240-232)*10 = 88 = 0x58
+			expectedBg:  "#000000",
+			description: "Should process 256-color grayscale correctly",
 		},
 	}
 
@@ -355,15 +369,21 @@ func TestParseExtendedColor_256Color_ParsesCorrectly(t *testing.T) {
 		expectedConsumed int
 	}{
 		{
-			name:             "Valid 256-color",
+			name:             "Valid 256-color red",
 			params:           []string{"5", "196"},
-			expectedColor:    "#FFFFFF", // colorToHex returns default
+			expectedColor:    "#FF0000", // Index 196 in 6x6x6 cube = bright red
 			expectedConsumed: 2,
 		},
 		{
-			name:             "256-color with extra params",
-			params:           []string{"5", "21", "extra", "params"},
-			expectedColor:    "#FFFFFF", // colorToHex returns default
+			name:             "256-color blue",
+			params:           []string{"5", "21"},
+			expectedColor:    "#0000FF", // Index 21 in 6x6x6 cube = blue
+			expectedConsumed: 2,
+		},
+		{
+			name:             "256-color white (index 15)",
+			params:           []string{"5", "15"},
+			expectedColor:    "#FFFFFF", // Standard 16-color white
 			expectedConsumed: 2,
 		},
 		{
@@ -399,15 +419,27 @@ func TestParseExtendedColor_RGB_ParsesCorrectly(t *testing.T) {
 		expectedConsumed int
 	}{
 		{
-			name:             "Valid RGB color",
+			name:             "Valid RGB orange",
 			params:           []string{"2", "255", "128", "0"},
-			expectedColor:    "#FFFFFF", // colorToHex returns default
+			expectedColor:    "#FF8000", // Direct RGB conversion
 			expectedConsumed: 4,
 		},
 		{
-			name:             "RGB with extra params",
-			params:           []string{"2", "0", "255", "128", "extra"},
-			expectedColor:    "#FFFFFF", // colorToHex returns default
+			name:             "RGB green-cyan",
+			params:           []string{"2", "0", "255", "128"},
+			expectedColor:    "#00FF80", // Direct RGB conversion
+			expectedConsumed: 4,
+		},
+		{
+			name:             "RGB white",
+			params:           []string{"2", "255", "255", "255"},
+			expectedColor:    "#FFFFFF",
+			expectedConsumed: 4,
+		},
+		{
+			name:             "RGB black",
+			params:           []string{"2", "0", "0", "0"},
+			expectedColor:    "#000000",
 			expectedConsumed: 4,
 		},
 		{
@@ -604,5 +636,33 @@ func TestColorToHex_NilColor_HandlesGracefully(t *testing.T) {
 	// Should return default fallback
 	if result != "#FFFFFF" {
 		t.Errorf("Expected #FFFFFF for nil color, got %s", result)
+	}
+}
+
+// TestColor256ToHex_BoundsChecking tests that out-of-range indices return fallback color
+func TestColor256ToHex_BoundsChecking_ReturnsDefaultForInvalid(t *testing.T) {
+	converter := NewColorConverter()
+
+	tests := []struct {
+		name     string
+		index    int
+		expected string
+	}{
+		{"Negative index", -1, "#FFFFFF"},
+		{"Large negative", -100, "#FFFFFF"},
+		{"Above 255", 256, "#FFFFFF"},
+		{"Far above 255", 1000, "#FFFFFF"},
+		{"Valid index 0 (black)", 0, "#000000"},
+		{"Valid index 15 (white)", 15, "#FFFFFF"},
+		{"Valid index 255 (last grayscale)", 255, "#EEEEEE"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := converter.color256ToHex(tt.index)
+			if result != tt.expected {
+				t.Errorf("color256ToHex(%d) = %s, expected %s", tt.index, result, tt.expected)
+			}
+		})
 	}
 }

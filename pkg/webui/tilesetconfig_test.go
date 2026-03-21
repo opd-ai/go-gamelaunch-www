@@ -42,7 +42,7 @@ func TestLoadTilesetConfig_ValidFile_ReturnsConfigWithCorrectData(t *testing.T) 
 	imagePath := filepath.Join(tempDir, "test.png")
 
 	// Write YAML config
-	err := os.WriteFile(configPath, []byte(yamlContent), 0644)
+	err := os.WriteFile(configPath, []byte(yamlContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to create test config file: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestLoadTilesetConfig_InvalidFile_ReturnsError(t *testing.T) {
 				configPath = filepath.Join(tempDir, tt.filename)
 			} else {
 				configPath = filepath.Join(tempDir, tt.filename)
-				err := os.WriteFile(configPath, []byte(tt.content), 0644)
+				err := os.WriteFile(configPath, []byte(tt.content), 0o644)
 				if err != nil {
 					t.Fatalf("Failed to create test file: %v", err)
 				}
