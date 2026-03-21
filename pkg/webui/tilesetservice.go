@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -56,6 +57,10 @@ type TilesetService struct {
 	enableImageOptimization bool
 	maxCacheSize            int
 	cacheDuration           time.Duration
+
+	// Cache telemetry (updated atomically)
+	cacheHits   uint64
+	cacheMisses uint64
 }
 
 // ProcessedImage represents a processed tileset image with metadata
@@ -345,8 +350,8 @@ func (ts *TilesetService) getCacheStatus() map[string]interface{} {
 	return map[string]interface{}{
 		"cached_images": len(ts.imageCache),
 		"max_size":      ts.maxCacheSize,
-		"cache_hits":    0, // TODO: Implement cache hit tracking
-		"cache_misses":  0, // TODO: Implement cache miss tracking
+		"cache_hits":    atomic.LoadUint64(&ts.cacheHits),
+		"cache_misses":  atomic.LoadUint64(&ts.cacheMisses),
 	}
 }
 
@@ -559,11 +564,13 @@ func (ts *TilesetService) getDominantColors(img image.Image, count int) []string
 func (ts *TilesetService) getCachedImage(key string) *ProcessedImage {
 	if cached, exists := ts.imageCache[key]; exists {
 		if time.Since(cached.ProcessedAt) < ts.cacheDuration {
+			atomic.AddUint64(&ts.cacheHits, 1)
 			return cached
 		}
 		// Remove expired entry
 		delete(ts.imageCache, key)
 	}
+	atomic.AddUint64(&ts.cacheMisses, 1)
 	return nil
 }
 

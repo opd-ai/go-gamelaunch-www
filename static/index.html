@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>go-gamelaunch-www</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+        #loading {
+            color: #ccc;
+            font-family: monospace;
+            font-size: 14px;
+            position: absolute;
+        }
+    </style>
+</head>
+<body>
+    <div id="loading">Loading…</div>
+    <!--
+        wasm_exec.js must be present alongside this file.
+        Copy it from your Go installation:
+            cp "$(go env GOROOT)/misc/wasm/wasm_exec.js" static/wasm_exec.js
+        Or build the binary and serve this directory:
+            make wasm
+    -->
+    <script src="wasm_exec.js"></script>
+    <script>
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("gamelaunch.wasm"), go.importObject)
+            .then(result => {
+                document.getElementById("loading").style.display = "none";
+                go.run(result.instance);
+            })
+            .catch(err => {
+                document.getElementById("loading").textContent = "Failed to load: " + err;
+                console.error(err);
+            });
+    </script>
+</body>
+</html>

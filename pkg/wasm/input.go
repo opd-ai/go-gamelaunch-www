@@ -88,8 +88,14 @@ func (ih *InputHandler) initKeyMap() {
 	ih.keyMap[ebiten.KeyBackquote] = "`"
 }
 
-// applyShiftModifier applies shift modifier to letter keys, converting to uppercase
-func (ih *InputHandler) applyShiftModifier(key ebiten.Key, char string) string {
+// mapKey resolves a key to its terminal string using the given mapping.
+// Returns the empty string when the key has no mapping.
+// For letter keys, shift is applied automatically.
+func mapKey(key ebiten.Key, mapping map[ebiten.Key]string) string {
+	char, ok := mapping[key]
+	if !ok {
+		return ""
+	}
 	if key >= ebiten.KeyA && key <= ebiten.KeyZ && ebiten.IsKeyPressed(ebiten.KeyShift) {
 		return string(rune(char[0] - 32))
 	}
@@ -118,8 +124,8 @@ func (ih *InputHandler) PopPressedKeys() []string {
 
 	result := make([]string, 0, len(ih.pressedKeys))
 	for _, key := range ih.pressedKeys {
-		if char, ok := ih.keyMap[key]; ok {
-			result = append(result, ih.applyShiftModifier(key, char))
+		if char := mapKey(key, ih.keyMap); char != "" {
+			result = append(result, char)
 		}
 	}
 	ih.pressedKeys = ih.pressedKeys[:0]
