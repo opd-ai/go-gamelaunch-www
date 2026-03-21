@@ -144,7 +144,7 @@
   test -f docs/MIGRATION.md && echo "Migration guide exists"
   ```
 
-### Step 9: Remove Legacy Code (Future)
+### Step 9: Remove Legacy Code (Do immediately after completing WASM client)
 - **Deliverable**: Remove after migration period
   - `pkg/webui/rpc.go` - Gorilla JSON-RPC handler
   - `pkg/webui/static/` - Embedded HTML/JS/CSS assets
